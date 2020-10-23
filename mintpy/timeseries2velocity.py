@@ -442,6 +442,7 @@ def run_velocity_estimation(inps):
     tsobj = timeseries(inps.timeseries_file)
     ts_res = np.zeros((num_date, length*width), dtype=np.float32)
     ts_res[:, mask] = ts_res_i
+    ts_res = ts_res.reshape((num_date, length, width))
     ts_res_file = os.path.join(os.path.dirname(inps.timeseries_file), 'ts2veloResidual.h5')
     writefile.write(ts_res, out_file=ts_res_file, metadata=atr, ref_file=tsobj.file)
 

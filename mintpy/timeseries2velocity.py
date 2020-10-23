@@ -105,6 +105,12 @@ def create_parser():
                       help='step function(s) at YYYYMMDD (default: %(default)s). E.g.:\n' +
                            '--step 20061014           # coseismic step  at 2006-10-14\n' +
                            '--step 20110311 20120928  # coseismic steps at 2011-03-11 and 2012-09-28\n')
+    
+    # WLS weighting matrix file
+    WLS = parser.add_argument_group('weighted least square input', 'a weight file')
+    WLS.add_argument('--weight', '--weight_matrix', dest='weight_file', type=str, default='no',
+                      help='a file containing weighting values. (default: %(default)s). E.g.:\n' +
+                           '--weight rms_timeseriesResidual_ramp.txt    # use inverse of RMS residual\n')
 
     # bootstrap
     bootstrap = parser.add_argument_group('bootstrapping', 'estimating the mean / STD of the velocity estimator')
@@ -279,7 +285,7 @@ def read_date_info(inps):
 
 
 ############################################################################
-def estimate_velocity(date_list, dis_ts, model):
+def estimate_velocity(date_list, dis_ts, model, weight):
     """
     Deformation model estimator, using a suite of linear, periodic, step function(s).
 
@@ -293,6 +299,7 @@ def estimate_velocity(date_list, dis_ts, model):
                              'step'       : ['20061014'], # list of str, date(s) in YYYYMMDD.
                              ...
                              }
+                weight    - a str indicating the file for weighting
     Returns:    G         - 2D np.ndarray, design matrix           in size of (num_date, num_par)
                 m         - 2D np.ndarray, parameter solution      in size of (num_par, num_pixel)
                 e2        - 1D np.ndarray, sum of squared residual in size of (num_pixel,)
@@ -306,14 +313,50 @@ def estimate_velocity(date_list, dis_ts, model):
         raise ValueError('linear/polynomial model is NOT included! Are you sure?!')
 
     G = timeseries.get_design_matrix4time_func(date_list, model)
+    
+    num_date  = dis_ts.shape[0]
 
+    # weighted least square solver:
+    # add a weighting matrix, W, based on the inverse of estimated timeseries residuals
+    # read from 'rms_timeseriesResidual_ramp.txt' if there exist
+    rms_file = weight
+    if rms_file != 'no':
+        exclude_dates = []
+        try:
+            with open('exclude_date.txt', 'r') as f:
+                for line in f:
+                    exclude_dates.append(line.split()[0])
+        except:
+            pass
+        print(exclude_dates)
+        rms_values = []
+        with open(rms_file, 'r') as f:
+            for line in f:
+                tmp = line.split()
+                if (tmp[0] != '#') and (tmp[0] not in exclude_dates):
+                    rms_values.append(float(tmp[1]))
+        rms_values = np.array(rms_values)
+        w = 1/rms_values           # weights are the inverse of rms residues
+        w = num_date*(w/sum(w))   # normalization of weights: sum(w) = num_date
+        W = np.diag(w)             # build weight matrix
+        if len(W) == len(G):
+            print('Doing Weighted Least Square inversion using RMS residuals')
+            G      = np.sqrt(W)@G
+            dis_ts = np.sqrt(W)@dis_ts
+            m, e2  = linalg.lstsq(G, dis_ts)[:2]
+            ts_res_i = dis_ts - G@m
+        else:        
+            print('Weight matrix size not consistent with Num of dates, stop inversion!')
+    else:
     # least squares solver
     # Opt. 1: m = np.linalg.pinv(G).dot(dis_ts)
     # Opt. 2: m = scipy.linalg.lstsq(G, dis_ts, cond=1e-15)[0]
     # Numpy is not used because it can not handle NaN value in dis_ts
-    m, e2 = linalg.lstsq(G, dis_ts)[:2]
+    # Note: the sum of squared residuals, e2 = np.sum( (dis_ts-Gm)**2 )
+        m, e2  = linalg.lstsq(G, dis_ts)[:2]
+        ts_res_i = dis_ts - G@m
 
-    return G, m, e2
+    return G, m, e2, ts_res_i
 
 
 def run_velocity_estimation(inps):
@@ -325,7 +368,6 @@ def run_velocity_estimation(inps):
         ts_data *= 1./1000.
     length, width = int(atr['LENGTH']), int(atr['WIDTH'])
     num_date = inps.numDate
-
     # get deformation model from parsers
     model = dict()
     model['polynomial'] = inps.polynomial
@@ -335,6 +377,9 @@ def run_velocity_estimation(inps):
     num_period = len(inps.periodic)
     num_step = len(inps.step)
     num_param = (poly_deg + 1) + (2 * num_period) + num_step
+
+    # get weighting file from parser
+    weight = inps.weight_file
 
     if inps.bootstrap:
         """
@@ -354,7 +399,7 @@ def run_velocity_estimation(inps):
             boot_ind.sort()
 
             # velocity estimation
-            m = estimate_velocity(ts_date[boot_ind].tolist(), ts_data[boot_ind], model)[1]
+            m = estimate_velocity(ts_date[boot_ind].tolist(), ts_data[boot_ind], model, weight)[1]
             boot_vel_lin[i] = np.array(m[1, :], dtype=dataType)
             prog_bar.update(i+1, suffix='iteration {} / {}'.format(i+1, inps.bootstrapCount))
         prog_bar.close()
@@ -391,7 +436,14 @@ def run_velocity_estimation(inps):
     ## Solve Gm = d
     m = np.zeros((num_param, length*width), dtype=dataType)
     e2 = np.zeros((length*width), dtype=dataType)
-    G, m[:, mask], e2[mask] = estimate_velocity(inps.dateList, ts_data[:, mask], model)
+    G, m[:, mask], e2[mask], ts_res_i = estimate_velocity(inps.dateList, ts_data[:, mask], model, weight)
+
+    # Write ts2velo Residual file
+    tsobj = timeseries(inps.timeseries_file)
+    ts_res = np.zeros((num_date, length*width), dtype=np.float32)
+    ts_res[:, mask] = ts_res_i
+    ts_res_file = os.path.join(os.path.dirname(inps.timeseries_file), 'ts2veloResidual.h5')
+    writefile.write(ts_res, out_file=ts_res_file, metadata=atr, ref_file=tsobj.file)
 
     ## Compute the covariance matrix for model parameters: Gm = d
     # C_m_hat = (G.T * C_d^-1, * G)^-1  # the most generic form

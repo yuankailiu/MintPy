@@ -337,13 +337,13 @@ def estimate_velocity(date_list, dis_ts, model, weight):
                     rms_values.append(float(tmp[1]))
         rms_values = np.array(rms_values)
         w = 1/rms_values           # weights are the inverse of rms residues
-        w = num_date*(w/sum(w))   # normalization of weights: sum(w) = num_date
+        w = num_date*(w/sum(w))    # normalization of weights: sum(w) = num_date
         W = np.diag(w)             # build weight matrix
         if len(W) == len(G):
             print('Doing Weighted Least Square inversion using RMS residuals')
-            G      = np.sqrt(W)@G
-            dis_ts = np.sqrt(W)@dis_ts
-            m, e2  = linalg.lstsq(G, dis_ts)[:2]
+            G_n      = np.sqrt(W)@G
+            dis_ts_n = np.sqrt(W)@dis_ts
+            m, e2    = linalg.lstsq(G_n, dis_ts_n)[:2]
             ts_res_i = dis_ts - G@m
         else:        
             print('Weight matrix size not consistent with Num of dates, stop inversion!')

@@ -340,11 +340,12 @@ def estimate_velocity(date_list, dis_ts, model, weight):
         w = num_date*(w/sum(w))    # normalization of weights: sum(w) = num_date
         W = np.diag(w)             # build weight matrix
         if len(W) == len(G):
-            print('Doing Weighted Least Square inversion using RMS residuals')
-            G_n      = np.sqrt(W)@G
-            dis_ts_n = np.sqrt(W)@dis_ts
+            print(' ** Weighted Least Square inversion using 1/RMS_residuals')
+            print(' ** Report weighted residuals')
+            G_n      = W@G
+            dis_ts_n = W@dis_ts
             m, e2    = linalg.lstsq(G_n, dis_ts_n)[:2]
-            ts_res_i = dis_ts - G@m
+            ts_res_i = dis_ts_n - G_n@m  # weighted residual
         else:        
             print('Weight matrix size not consistent with Num of dates, stop inversion!')
     else:
@@ -353,6 +354,7 @@ def estimate_velocity(date_list, dis_ts, model, weight):
     # Opt. 2: m = scipy.linalg.lstsq(G, dis_ts, cond=1e-15)[0]
     # Numpy is not used because it can not handle NaN value in dis_ts
     # Note: the sum of squared residuals, e2 = np.sum( (dis_ts-Gm)**2 )
+        print('Least Square without weighting')
         m, e2  = linalg.lstsq(G, dis_ts)[:2]
         ts_res_i = dis_ts - G@m
 

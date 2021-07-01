@@ -330,12 +330,17 @@ def date_list2vector(date_list):
 
 
 ################################################################
-def get_date_range(dmin, dmax):
-    """Make a list of dates with one-day interval [dmin, dmax]
+
+def get_date_range(dmin, dmax, last_date=False):
+    """Make a list of dates with one-day interval
+    Values are generated within the half-open interval [start, stop)
     Parameters: dmin      : str in YYYYMMDD format
                 dmax      : str in YYYYMMDD format
+                last_date : bool; True to include the last date
     Returns:    date_list : list of str in YYYYMMDD format
     """
+    if last_date:
+        dmax = (dt.datetime.strptime(dmax, '%Y%m%d')+dt.timedelta(days=1)).strftime('%Y%m%d')
     t1 = '{}-{}-{}'.format(dmin[:4], dmin[4:6], dmin[6:])
     t2 = '{}-{}-{}'.format(dmax[:4], dmax[4:6], dmax[6:])
     date_objs = np.arange(t1, t2, dtype='datetime64[D]').astype('M8[D]').astype('O')

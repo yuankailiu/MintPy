@@ -322,8 +322,13 @@ def read_init_info(inps):
         inps.vlim = inps.wrap_range
     inps.cbar_label = 'Displacement [{}]'.format(inps.disp_unit_img)
 
-    ## fit a suite of time func to the time series
+    # fit a suite of time func to the time series
     inps.model, inps.num_param = ts2vel.read_inps2model(inps, date_list=inps.date_list)
+
+    # dense TS for plotting
+    inps.date_list_fit = ptime.get_date_range(inps.date_list[0], inps.date_list[-1], last_date=True)
+    inps.dates_fit = ptime.date_list2vector(inps.date_list_fit)[0]
+    inps.G_fit = timeseries.get_design_matrix4time_func(date_list=inps.date_list_fit, model=inps.model)
 
     # dense TS for plotting
     inps.date_list_fit = ptime.get_date_range(inps.date_list[0], inps.date_list[-1])
@@ -664,6 +669,10 @@ def save_ts_data_and_plot(yx, d_ts, m_strs, ts_fit, inps):
     else:
         inps.outfile_base = 'y{}x{}'.format(y, x)
 
+    # calculate the residual RMS between d_ts and d_ts_fit
+    d_ts_fit = ts_fit[np.in1d(inps.date_list_fit, inps.date_list).nonzero()[0]]
+    rmsr = np.sqrt(np.nanmean((d_ts-d_ts_fit)**2))
+
     # TXT - point time-series and time func param
     outName = '{}_ts.txt'.format(inps.outfile_base)
     header = 'time-series file = {}\n'.format(inps.file[0])
@@ -673,6 +682,7 @@ def save_ts_data_and_plot(yx, d_ts, m_strs, ts_fit, inps):
     header += 'estimated time function parameters:\n'
     for m_str in m_strs:
         header += f'    {m_str}\n'
+    header += 'residual root-mean-square: {} {}\n'.format(rmsr, inps.disp_unit)
     header += 'unit: {}'.format(inps.disp_unit)
 
     # prepare data
@@ -681,6 +691,8 @@ def save_ts_data_and_plot(yx, d_ts, m_strs, ts_fit, inps):
     # write
     np.savetxt(outName, data, fmt='%s', delimiter='\t', header=header)
     vprint('save displacement time-series to file: '+outName)
+
+    # write fitted model to TXT file
     with open(outName, 'ab') as f:
         data = np.hstack((np.array(inps.date_list_fit).reshape(-1, 1), ts_fit.reshape(-1, 1)))
         f.write(b'# fitted data:\n')

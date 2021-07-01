@@ -650,7 +650,7 @@ def get_ts_title(y, x, coord_obj):
     return title
 
 
-def save_ts_data_and_plot(yx, d_ts, m_strs, inps):
+def save_ts_data_and_plot(yx, d_ts, m_strs, ts_fit, inps):
     """Save TS data and plots into files."""
     y, x = yx
     vprint('save info on pixel ({}, {})'.format(y, x))
@@ -681,6 +681,10 @@ def save_ts_data_and_plot(yx, d_ts, m_strs, inps):
     # write
     np.savetxt(outName, data, fmt='%s', delimiter='\t', header=header)
     vprint('save displacement time-series to file: '+outName)
+    with open(outName, 'ab') as f:
+        data = np.hstack((np.array(inps.date_list_fit).reshape(-1, 1), ts_fit.reshape(-1, 1)))
+        f.write(b'# fitted data:\n')
+        np.savetxt(f, data, fmt='%s', delimiter='\t')
 
     # Figure - point time-series
     outName = '{}_ts.pdf'.format(inps.outfile_base)
@@ -770,11 +774,11 @@ class timeseriesViewer():
         # Figure 2 - Time Series Displacement - Point
         self.fig_pts, self.ax_pts = plt.subplots(num=self.figname_pts, figsize=self.figsize_pts)
         if self.yx:
-            d_ts, m_strs = self.plot_point_timeseries(self.yx)
+            d_ts, m_strs, ts_fit = self.plot_point_timeseries(self.yx)
 
             # save figures and data to files
             if self.save_fig:
-                save_ts_data_and_plot(self.yx, d_ts, m_strs, self)
+                save_ts_data_and_plot(self.yx, d_ts, m_strs, ts_fit, self)
 
         # Final linking of the canvas to the plots.
         self.fig_img.canvas.mpl_connect('button_press_event', self.update_plot_timeseries)
@@ -970,7 +974,7 @@ class timeseriesViewer():
             # update figure
             self.fig_pts.canvas.draw()
 
-        return ts_dis, m_strs
+        return ts_dis, m_strs, ts_fit
 
 
     def update_plot_timeseries(self, event):

@@ -55,8 +55,15 @@ def check_loaded_dataset(work_dir='./', print_msg=True, relpath=False):
         msg_aria = ''
 
     # 1. [required] interferograms stack file: unwrapPhase, coherence
-    stack_file = os.path.join(work_dir, 'inputs/ifgramStack.h5')
-    dnames = ['unwrapPhase', 'rangeOffset', 'azimuthOffset']
+    stack_opts = ['ifgramStack.h5', 'offsetStack.h5']
+    files = []
+    for opt in stack_opts:
+        files += glob.glob(os.path.join(work_dir, 'inputs/{}'.format(opt)))
+    stack_file = files[0]   # take the first grabbed file because usually users only have either one
+    if os.path.basename(stack_file).startswith('offset'):
+        dnames = ['rangeOffset', 'azimuthOffset']
+    else:
+        dnames = ['unwrapPhase', 'rangeOffset', 'azimuthOffset']
 
     if is_file_exist(stack_file, abspath=True):
         obj = ifgramStack(stack_file)

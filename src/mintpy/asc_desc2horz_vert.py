@@ -262,5 +262,10 @@ def run_asc_desc2horz_vert(inps):
         writefile.write(dhorz, out_file=inps.outfile[0], metadata=atr, ref_file=ref_file)
         print('writing vertical   component to file: '+inps.outfile[1])
         writefile.write(dvert, out_file=inps.outfile[1], metadata=atr, ref_file=ref_file)
-
+        print('writing los_disp   component to file: '+'los_disp.h5')
+        writefile.write(dlos, out_file='los_disp.h5', metadata=atr, ref_file=ref_file)
+        print('writing los_inc_angle to file: '+'los_inc_angle.h5')
+        writefile.write(los_inc_angle, out_file='los_inc_angle.h5', metadata=atr, ref_file=ref_file)
+        print('writing los_az_angle to file: '+'los_az_angle.h5')
+        writefile.write(los_az_angle, out_file='los_az_angle.h5', metadata=atr, ref_file=ref_file)
     return inps.outfile

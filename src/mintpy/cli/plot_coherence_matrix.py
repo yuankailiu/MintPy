@@ -48,12 +48,16 @@ def create_parser(subparsers=None):
                         help='start/jump/end fraction for truncated colormap. Default: 0.0 0.7 1.0')
     parser.add_argument('--figsize','--fs', dest='fig_size', metavar=('WID', 'LEN'), type=float, nargs=2,
                         help='figure size in inches. Default: [8, 4]')
+    parser.add_argument('--plot_style', dest='plot_style', default='diagonal', help='diagonal or flattened.\n'+
+                             'Default: diagonal')
 
     parser.add_argument('--img-file', dest='img_file',
                         help='dataset to show in map to facilitate point selection. Default: velocity.h5')
     parser.add_argument('--view-cmd', dest='view_cmd', default='view.py {} --wrap --noverbose ',
                         help='view.py command to plot the input map file\n'+
                              'Default: view.py img_file --wrap --noverbose')
+    parser.add_argument('--ts_file', dest='ts_file', default=None, help='timeseries file.\n'+
+                             'Default: None')
 
     # aux files
     parser.add_argument('--tcoh', dest='tcoh_file', default='temporalCoherence.h5',

@@ -11,7 +11,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from mintpy import view
-from mintpy.objects import ifgramStack
+from mintpy.objects import (  # feature: support showing timeseries on the fly
+    ifgramStack,
+    timeseries,
+)
 from mintpy.utils import plot as pp, readfile, utils as ut
 
 
@@ -108,14 +111,20 @@ class coherenceMatrixViewer():
             if template['mintpy.networkInversion.maskDataset'] == 'coherence':
                 self.min_coh_used = float(template['mintpy.networkInversion.maskThreshold'])
                 vprint('Pixel-wised masking is applied in invert_network step')
-
+                vprint(f'coherence masking, threshold = {self.min_coh_used}')
+        return
 
     def plot(self):
         # Figure 1
         self.fig = plt.figure(self.figname, figsize=self.fig_size)
 
         # Axes 1 - Image
-        self.ax_img = self.fig.add_axes([0.05, 0.1, 0.4, 0.8])
+        if self.plot_style == 'flattened':
+            print('drawing flattened style of the figure!')
+            self.ax_img = self.fig.add_axes([0.05, 0.1, 0.15, 0.85])
+        else:
+            self.ax_img = self.fig.add_axes([0.05, 0.1, 0.4, 0.8])
+
         view_cmd = self.view_cmd.format(self.img_file)
         d_img, atr, view_inps = view.prep_slice(view_cmd)
         self.coord = ut.coordinate(atr)
@@ -137,9 +146,29 @@ class coherenceMatrixViewer():
         self.ax_img = view.plot_slice(self.ax_img, d_img, atr, view_inps)[0]
         self.fig_coord = view_inps.fig_coord
 
+
         # Axes 2 - coherence matrix
-        self.ax_mat = self.fig.add_axes([0.55, 0.125, 0.40, 0.75])
         self.colormap = pp.ColormapExt(self.cmap_name, vlist=self.cmap_vlist).colormap
+        if self.plot_style == 'flattened':
+            self.ax_mat = self.fig.add_axes([0.28, 0., 0.65, 0.75])
+            self.cax_mat = self.fig.add_axes([0.28, 0.24, 0.10, 0.018])
+
+            # Axes 3 - avg. coherence aross pairs at each epoch
+            self.ax_tsCoh = self.fig.add_axes([0.28, 0.45, 0.65, 0.30])
+
+            # Axes 4 - time series plot
+            if self.ts_file is not None:
+                self.ax_ts = self.ax_tsCoh.twinx()
+                print(f'Reading from time-series file: {self.ts_file}')
+                self.ts_obj = timeseries(os.path.join(self.ts_file))
+                self.ts_obj.open(print_msg=False)
+
+                # Axes 5 - time series moving misfit
+                self.ax_tsMis = self.ax_tsCoh.twinx()
+
+        else:
+            self.ax_mat = self.fig.add_axes([0.55, 0.125, 0.40, 0.75])
+
         if all(i is not None for i in self.yx):
             self.plot_coherence_matrix4pixel(self.yx)
 
@@ -153,13 +182,32 @@ class coherenceMatrixViewer():
         """Plot coherence matrix for one pixel
         Parameters: yx : list of 2 int
         """
+        # update the map axis
+        try:
+            self.scatter.remove()
+        except:
+            pass
+        if all(i is not None for i in yx):
+            # point yx --> lalo for geocoded product
+            pts_lalo = np.array(self.coord.radar2geo(yx[0], yx[1])[0:2]).reshape(-1,2)
+            self.scatter = self.ax_img.scatter(pts_lalo[:,1], pts_lalo[:,0], 40, fc='r', ec='k', marker='^')
+
+        # update other axes
         self.ax_mat.cla()
+        if self.plot_style == 'flattened':
+            self.ax_tsCoh.cla()
+            if self.ts_file is not None:
+                self.ax_ts.cla()
+                self.ax_tsMis.cla()
 
         # read coherence
         box = (yx[1], yx[0], yx[1]+1, yx[0]+1)
         coh = readfile.read(self.ifgram_file, datasetName='coherence', box=box)[0]
 
-        # ex_date for pixel-wise masking during network inversion
+        # read time series
+        ts = readfile.read(self.ts_file, datasetName='timeseries', box=box)[0]
+
+        # ex_date for pixel-wise masking during network inversion (only for coherence data)
         ex_date12_list = self.ex_date12_list[:]   #local copy
         if self.min_coh_used > 0.:
             ex_date12_list += np.array(self.date12_list)[coh < self.min_coh_used].tolist()
@@ -172,25 +220,53 @@ class coherenceMatrixViewer():
         if self.tcoh_file:
             tcoh = self.tcoh[yx[0], yx[1]]
             plotDict['fig_title'] += f', tcoh = {tcoh:.2f}'
-        plotDict['colormap'] = self.colormap
-        plotDict['cmap_vlist'] = self.cmap_vlist
+        plotDict['colormap']    = self.colormap
+        plotDict['cmap_vlist']  = self.cmap_vlist
         plotDict['disp_legend'] = False
 
         # plot
-        coh_mat = pp.plot_coherence_matrix(
-            self.ax_mat,
-            date12List=self.date12_list,
-            cohList=coh.tolist(),
-            date12List_drop=ex_date12_list,
-            p_dict=plotDict,
-        )[1]
 
-        self.ax_mat.annotate('ifgrams\navailable', xy=(0.05, 0.05), xycoords='axes fraction', fontsize=12)
-        self.ax_mat.annotate('ifgrams\nused', ha='right', xy=(0.95, 0.85), xycoords='axes fraction', fontsize=12)
+        if self.plot_style == 'flattened':
+            coh_mat = pp.plot_rotate_diag_coherence_matrix_new(
+                ax              = self.ax_mat,
+                cax             = self.cax_mat,
+                ax_tsCoh        = self.ax_tsCoh,
+                date12List      = self.date12_list,
+                cohList         = coh.tolist(),
+                date12List_drop = ex_date12_list,
+                ax_ts           = self.ax_ts,
+                ax_tsMis        = self.ax_tsMis,
+                ts_obj          = self.ts_obj,
+                ts              = ts,
+                rotate_deg      = -45.,
+                disp_half       = False,
+                disp_min        = 0.2,
+                p_dict          = plotDict)[1]
+
+            self.ax_mat.annotate('ifgrams available', ha='right', xy=(0.95, 1.30), xycoords='axes fraction', fontsize=12)
+            self.ax_mat.annotate('ifgrams used',      ha='right', xy=(0.95,-0.70), xycoords='axes fraction', fontsize=12)
+        else:
+            coh_mat = pp.plot_coherence_matrix(
+                self.ax_mat,
+                date12List=self.date12_list,
+                cohList=coh.tolist(),
+                date12List_drop=ex_date12_list,
+                p_dict=plotDict,
+            )[1]
+
+            self.ax_mat.annotate('ifgrams\navailable', xy=(0.05, 0.05), xycoords='axes fraction', fontsize=12)
+            self.ax_mat.annotate('ifgrams\nused', ha='right', xy=(0.95, 0.85), xycoords='axes fraction', fontsize=12)
+
 
         # status bar
         def format_coord(x, y):
-            row, col = int(y+0.5), int(x+0.5)
+            if self.plot_style == 'flattened':
+                rotation = np.deg2rad(-45.)
+            else:
+                rotation = np.deg2rad(0.)
+            row_, col_ = int(y+0.5), int(x+0.5)
+            row = int(-(x * np.sin(rotation) + y * np.cos(rotation)) + 0.5)
+            col = int( (x * np.cos(rotation) - y * np.sin(rotation)) + 0.5)
             date12 = sorted([self.date_list[row], self.date_list[col]])
             date12 = [f'{i[0:4]}-{i[4:6]}-{i[6:8]}' for i in date12]
             return f'x={date12[0]}, y={date12[1]}, v={coh_mat[row, col]:.3f}'

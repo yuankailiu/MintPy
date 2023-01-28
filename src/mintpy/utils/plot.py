@@ -803,6 +803,172 @@ def plot_perp_baseline_hist(ax, dateList, pbaseList, p_dict={}, dateList_drop=[]
     return ax
 
 
+def plot_rotate_diag_coherence_matrix_new(ax, cax, ax_tsCoh, date12List, cohList, date12List_drop=[],
+                                          ax_ts=None, ax_tsMis=None, ts_obj=None, ts=None,
+                                          rotate_deg=-45., disp_half=False, disp_min=0.2, p_dict={}):
+    """Plot Rotated Coherence Matrix, suitable for Sentinel-1 data with sequential network"""
+    # Figure Setting
+    if 'ds_name'     not in p_dict.keys():   p_dict['ds_name']     = 'Coherence'
+    if 'fontsize'    not in p_dict.keys():   p_dict['fontsize']    = 12
+    if 'linewidth'   not in p_dict.keys():   p_dict['linewidth']   = 2
+    if 'markercolor' not in p_dict.keys():   p_dict['markercolor'] = 'orange'
+    if 'markersize'  not in p_dict.keys():   p_dict['markersize']  = 12
+    if 'disp_title'  not in p_dict.keys():   p_dict['disp_title']  = True
+    if 'fig_title'   not in p_dict.keys():   p_dict['fig_title']   = '{} Matrix'.format(p_dict['ds_name'])
+    if 'colormap'    not in p_dict.keys():   p_dict['colormap']    = 'jet'
+    if 'cbar_label'  not in p_dict.keys():   p_dict['cbar_label']  = p_dict['ds_name']
+    if 'vlim'        not in p_dict.keys():   p_dict['vlim']        = (0.2, 1.0)
+    if 'disp_cbar'   not in p_dict.keys():   p_dict['disp_cbar']   = True
+    if 'legend_loc'  not in p_dict.keys():   p_dict['legend_loc']  = 'best'
+    if 'disp_legend' not in p_dict.keys():   p_dict['disp_legend'] = True
+
+    # support input colormap: string for colormap name, or colormap object directly
+    if isinstance(p_dict['colormap'], str):
+        cmap = ColormapExt(p_dict['colormap']).colormap
+    elif isinstance(p_dict['colormap'], mpl.colors.LinearSegmentedColormap):
+        cmap = p_dict['colormap']
+        p_dict['vlim'] = [p_dict['cmap_vlist'][0], p_dict['cmap_vlist'][-1]]
+    else:
+        raise ValueError('unrecognized colormap input: {}'.format(p_dict['colormap']))
+
+    date12List = ptime.yyyymmdd_date12(date12List)
+    coh_mat = pnet.coherence_matrix(date12List, cohList)
+
+    # Date Convert
+    m_dates = [i.split('_')[0] for i in date12List]
+    s_dates = [i.split('_')[1] for i in date12List]
+    dateList = sorted(list(set(m_dates + s_dates)))
+
+    ts_dates = []
+    for yyyymmdd in ts_obj.dateList:
+        ts_dates.append(dt.datetime.strptime(yyyymmdd, "%Y%m%d"))
+    coh_dates = []
+    for yyyymmdd in dateList:
+        coh_dates.append(dt.datetime.strptime(yyyymmdd, "%Y%m%d"))
+    coh_years = np.array([i.year + (i.timetuple().tm_yday-1)/365.25 for i in coh_dates])
+
+    if date12List_drop:
+        # Set dropped pairs' value to nan, in upper triangle only.
+        for date12 in date12List_drop:
+            idx1, idx2 = (dateList.index(i) for i in date12.split('_'))
+            coh_mat[idx1, idx2] = np.nan
+
+    # spatial coherence at each acquisition
+    tmp = np.array(coh_mat)
+    tmp[np.tril_indices(tmp.shape[0], -1)] = np.nan
+    coh_dateAvg = np.nanmean(tmp, axis=1)
+
+    # ----------- Axis at Bottom -------------
+    # Show diagonal value as black, to be distinguished from un-selected interferograms
+    diag_mat = np.diag(np.ones(coh_mat.shape[0]))
+    diag_mat[diag_mat == 0.] = np.nan
+    im = ax.imshow(diag_mat, cmap='gray_r', vmin=0.0, vmax=1.0, interpolation='none')
+    im.set_transform(mpl.transforms.Affine2D().rotate_deg(rotate_deg) + ax.transData)
+    im = ax.imshow(coh_mat, cmap=cmap, vmin=p_dict['vlim'][0], vmax=p_dict['vlim'][1], interpolation='none')
+    im.set_transform(mpl.transforms.Affine2D().rotate_deg(rotate_deg) + ax.transData)
+
+    # Colorbar
+    if p_dict['disp_cbar']:
+        cbar = plt.colorbar(im, cax=cax, orientation='horizontal', ticks=sorted(list(set(p_dict['cmap_vlist']+[0]))))
+        cbar.set_label(p_dict['cbar_label'], fontsize=p_dict['fontsize'])
+
+    # Legend (have not tested)
+    if date12List_drop and p_dict['disp_legend']:
+        ax.plot([], [], label='Upper: Ifgrams used')
+        ax.plot([], [], label='Lower: Ifgrams all')
+        ax.legend(loc=p_dict['legend_loc'], handlelength=0)
+
+    # aux info
+    num_img = coh_mat.shape[0]
+    idx1, idx2 = np.where(~np.isnan(coh_mat))
+    num_conn = np.max(np.abs(idx1 - idx2))
+
+    # axis format
+    ymax = np.sqrt(num_conn**2 / 2.) + 0.9
+    ax.set_xlim(-1, np.sqrt(num_img**2 * 2)-0.7)
+    if disp_half:
+        ax.set_ylim(0, ymax)
+    else:
+        ax.set_ylim(-1.*ymax, ymax)
+    ax.get_xaxis().set_ticks([])
+    ax.get_yaxis().set_ticks([])
+    ax.axis('off')
+
+    # datetime annotations
+    int_year = sorted(list(set(coh_years.astype(int))))
+    idx_list = []
+    for y in int_year:
+        for i, yi in enumerate(coh_years):
+            if yi >= y:
+                idx_list.append(i)
+                break
+    for idx in idx_list:
+        textstr = coh_dates[idx].strftime("%Y%m%d")
+        x = idx / np.cos(np.deg2rad(rotate_deg))
+        ax.plot([x, x], [0,-13], lw=.8, c='k', clip_on=False)
+        ax.text(x, -16, textstr, rotation=30.0, ha='center', va='center', fontsize=0.9*p_dict['fontsize'])
+
+    # ----------- Axis at Top -------------
+    # plot the avg spatial coherence for each epoch
+    ax_tsCoh.bar(coh_dates, coh_dateAvg, width=8., color='b', alpha=0.2)
+    ax_tsCoh.set_ylabel('Avg. spatial coh', color='b', rotation=-90, labelpad=10)
+    ax_tsCoh.tick_params(axis='y', colors='b')
+    ax_tsCoh.yaxis.set_label_position('right')
+    ax_tsCoh.yaxis.tick_right()
+
+    # plot the time series displacement if given
+    if (ts_obj is not None) and (ts is not None):
+        # time func model fitting
+        from mintpy.tsview import fit_time_func
+        from mintpy.utils import time_func
+        seconds   = 0
+        disp_unit = 'mm'     # compute as mm
+        model = {'polynomial' : 1,
+                 'periodic'   : [1.0, 0.5],
+                 'stepDate'   : [],
+                 'exp'        : {},
+                 'log'        : {},
+                 }
+        ts *= 1e3            # scale data also to mm
+        G_fit = time_func.get_design_matrix4time_func(date_list=ts_obj.dateList, model=model, seconds=seconds)
+        m_strs, ts_fit, ts_fit_lim = fit_time_func(model=model, date_list=ts_obj.dateList, ts_dis=ts,
+                                                   disp_unit=disp_unit, G_fit=G_fit, seconds=seconds)
+        rmse = np.sqrt(np.nanmean((ts_fit-ts)**2))      # RMSE of the time series
+
+        # string of the parameters
+        tmp        = m_strs[1].split(': ')[-1].split(' +/- ')
+        tmp[1]     = tmp[1].split('mm/year')[0]
+        legend_str = tmp[0] + r'$\pm$' + tmp[1] + ' mm/yr'
+
+        # plot timeseries & functional fit
+        ax_ts.scatter(ts_dates, ts, s=40, marker='^', fc='w', ec='k', zorder=2)
+        ax_ts.plot(ts_dates, ts_fit, lw=3, color='crimson', alpha=0.8, zorder=1, label=legend_str)
+        ax_ts.fill_between(ts_dates, y1=ts_fit_lim[0], y2=ts_fit_lim[1], fc='coral', alpha=0.2)
+
+        # plot moving-mean misfit (over 6 data points)
+        mean_misfit = np.convolve(np.abs(ts_fit-ts), np.ones(6)/6, mode='same')
+        ax_tsMis.bar(ts_dates, mean_misfit, width=8., color='grey', alpha=0.5)
+        ax_tsMis.set_ylabel('Moving misfit', color='grey', rotation=-90, labelpad=10)
+        ax_tsMis.tick_params(axis='y', colors='grey')
+        ax_tsMis.spines['right'].set_position(('axes', 1.05))
+        ax_tsMis.spines['right'].set_visible(True)
+
+        # axis format
+        ax_ts, t0, t1 = auto_adjust_xaxis_date(ax_ts, ts_obj.yearList, fontsize=p_dict['fontsize'], every_month=1, every_year=1, buffer_year=0.)
+        ax_ts.tick_params(which='both', direction='in', labelsize=p_dict['fontsize'], bottom=True, top=True, left=True, right=True, labelleft=True, labelright=False)
+        ax_ts.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+        ax_ts.set_ylabel('Displacement [mm]')
+        ax_ts.yaxis.set_label_position('left')
+        ax_ts.legend(loc='upper right')
+        ax_ts.set_zorder(3)
+
+    # Add some title info
+    if p_dict['disp_title']:
+        title_str = p_dict['fig_title'] + f', RMSE={rmse:.1f} mm'
+        ax_ts.set_title(title_str)
+    return ax, coh_mat, im
+
+
 def plot_rotate_diag_coherence_matrix(ax, coh_list, date12_list, date12_list_drop=[],
                                       rotate_deg=-45., cmap='RdBu', disp_half=False, disp_min=0.2):
     """Plot Rotated Coherence Matrix, suitable for Sentinel-1 data with sequential network"""
@@ -833,10 +999,10 @@ def plot_rotate_diag_coherence_matrix(ax, coh_list, date12_list, date12_list_dro
     #plot diagonal - black
     diag_mat = np.diag(np.ones(num_img))
     diag_mat[diag_mat == 0.] = np.nan
-    im = ax.imshow(diag_mat, cmap='gray_r', vmin=0.0, vmax=1.0)
+    im = ax.imshow(diag_mat, cmap='gray_r', vmin=0.0, vmax=1.0, interpolation='none')
     im.set_transform(mpl.transforms.Affine2D().rotate_deg(rotate_deg) + ax.transData)
 
-    im = ax.imshow(coh_mat, vmin=disp_min, vmax=1, cmap=cmap)
+    im = ax.imshow(coh_mat, vmin=disp_min, vmax=1, cmap=cmap, interpolation='none')
     im.set_transform(mpl.transforms.Affine2D().rotate_deg(rotate_deg) + ax.transData)
 
     #axis format
@@ -849,7 +1015,7 @@ def plot_rotate_diag_coherence_matrix(ax, coh_list, date12_list, date12_list_dro
     ax.get_xaxis().set_ticks([])
     ax.get_yaxis().set_ticks([])
     ax.axis('off')
-    return ax, im
+    return ax, coh_mat, im
 
 
 def plot_coherence_matrix(ax, date12List, cohList, date12List_drop=[], p_dict={}):

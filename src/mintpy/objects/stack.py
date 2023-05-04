@@ -1190,6 +1190,7 @@ class ifgramStack:
         # hand, choosing a reference point in the wrong place can lead to misinterpretations.
         # Tests in both Central Valley and Bristol Dry lakes confirms this.
         ds_name = 'wrapPhase' if 'wrapPhase' in self.datasetNames else 'unwrapPhase'
+        ds_name = 'unwrapPhase' ## Kai forces it to read the unwrapPhase because I spatial_averaged my wrapPhase and messed up (will be noisy)
         print(f'reading {ds_name} to compute closure phases')
         phase = self.read(datasetName=ds_name, box=box, print_msg=False)
 

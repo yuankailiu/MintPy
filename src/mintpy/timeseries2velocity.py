@@ -345,6 +345,9 @@ def run_timeseries2time_func(inps):
                 date_list=inps.date_list,
                 dis_ts=ts_data,
                 seconds=seconds)
+            print('##  option 2 - least squares with uncertainty propagation ')
+            print('##  G and e2 shape: ', G.shape, e2.shape)
+            print('##  m and d  shape: ', m.shape, ts_data.shape)
             #del ts_data
 
             ## Compute the covariance matrix for model parameters:
@@ -389,6 +392,11 @@ def run_timeseries2time_func(inps):
                 # loop over each pixel
                 # or use multidimension matrix multiplication
                 # m_cov = Gplus @ ts_cov @ Gplus.T
+                if inps.doWLS:
+                    print('## estimating WLS solution with Cd = ts_cov file ...')
+                    print('## the covariance matrix is too large in this block')
+                    print(f'     num_date {num_date} x num_pixel2inv {num_pixel2inv} = {num_pixel2inv*num_date}')
+                    print('     Try to loop over each pixel among all: ', num_pixel2inv)
                 prog_bar = ptime.progressBar(maxValue=num_pixel2inv)
                 for i in range(num_pixel2inv):
                     idx = idx_pixel2inv[i]
@@ -398,15 +406,23 @@ def run_timeseries2time_func(inps):
                     m_cov = np.linalg.multi_dot([Gplus, ts_covi, Gplus.T])
                     m_std[:, idx] = np.sqrt(np.diag(m_cov))
 
+                    if inps.doWLS:
+                        # option 2.1 + 2.3 - WLS assuming obs errors following normal dist. in time
+                        #   ts_covi = C_d    in option(2.3)
+                        C_d_inv = linalg.inv(ts_covi)                    # WLS C_d^-1
+                        Gplus   = np.linalg.multi_dot([linalg.inv(np.linalg.multi_dot([G.T, C_d_inv, G])), G.T, C_d_inv]) # WLS G_plus in eq(4)
+                        m_hat   = np.dot(Gplus, ts_data[:, idx])         # WLS m_hat in in eq(2)
+                        m[:, idx] = np.array(m_hat)                      # update the OLS m with WLS m
+
                     prog_bar.update(i+1, every=200, suffix=f'{i+1}/{num_pixel2inv} pixels')
                 prog_bar.close()
 
             elif inps.uncertaintyQuantification == 'residue':
                 # option 2.3 - assume obs errors following normal dist. in time
                 print('estimating time functions STD from time-series fitting residual ...')
-                G_inv = linalg.inv(np.dot(G.T, G))
-                m_var = e2.reshape(1, -1) / (num_date - num_param)
-                m_std[:, mask] = np.sqrt(np.dot(np.diag(G_inv).reshape(-1, 1), m_var))
+                G_inv = linalg.inv(np.dot(G.T, G))                                      # (G.T * G)^-1 in eq(6)
+                m_var = e2.reshape(1, -1) / (num_date - num_param)                      # sigma^2      in eq(12)
+                m_std[:, mask] = np.sqrt(np.dot(np.diag(G_inv).reshape(-1, 1), m_var))  # C_m_hat      in eq(8)
 
                 # simplified form for linear velocity (without matrix linear algebra)
                 # equation (10) in Fattahi & Amelung (2015, JGR)

@@ -82,11 +82,19 @@ def create_parser(subparsers=None):
                            '--exclude 20040502 20060708 20090103\n' +
                            '--exclude exclude_date.txt\n'+DROP_DATE_TXT)
 
-    # Uncertainty quantification
+    # Uncertainty quantification, propagation, and weighted least squares
     uq = parser.add_argument_group('Uncertainty quantification (UQ)', 'Estimating the time function parameters STD')
     uq.add_argument('--uq', '--uncertainty', dest='uncertaintyQuantification', metavar='VAL',
                     default='residue', choices={'residue', 'covariance', 'bootstrap'},
                     help='Uncertainty quantification method (default: %(default)s).')
+    uq.add_argument('--do-wls', dest='doWLS', action='store_true',
+                    help='For weighted least squares estimation (equations in option 2.1 in timeseries2velocity.py):\n'
+                         '  G * m = d                                            --- (1)\n'
+                         '  m_hat = G+ * d                                       --- (2)\n'
+                         '  G+ = (G.T * C_d^-1 * G)^-1 * G.T * C_d^-1            --- (4)\n'
+                         '  C_m_hat = G+ * C_d * G+.T = (G.T * C_d^-1 * G)^-1    --- (3)-(5)\n'
+                         'If --uncertainty=`covariance` and --ts-cov is given, then C_d = --ts-cov\n'
+                         'If --uncertainty=`residue` (C_d = sigma^2 * I) or `bootstrap`, no effects\n')
     uq.add_argument('--ts-cov','--ts-cov-file', dest='timeSeriesCovFile',
                     help='4D time-series (co)variance file for time function STD calculation')
     uq.add_argument('--bc', '--bootstrap-count', dest='bootstrapCount', type=int, default=400,

@@ -85,7 +85,7 @@ def create_parser(subparsers=None):
                            '--exclude 20040502 20060708 20090103\n' +
                            '--exclude exclude_date.txt\n'+DROP_DATE_TXT)
 
-    # Uncertainty quantification
+    # Uncertainty quantification, propagation, and weighted least squares
     uq = parser.add_argument_group('Uncertainty quantification (UQ)', 'Estimating the time function parameters STD')
     uq.add_argument('--uq', '--uncertainty', dest='uncertaintyQuantification', metavar='VAL',
                     default='residue', choices={'residue', 'covariance', 'bootstrap'},
@@ -93,6 +93,10 @@ def create_parser(subparsers=None):
                          'residue    - STD from time series fitting residue (Fattahi & Amelung, 2015)\n'
                          'covariance - STD from time series covariance\n'
                          'bootstrap  - STD from bootstrap resampling (Efron & Tibshirani, 1986)')
+    uq.add_argument('--do-wls', dest='doWLS', action='store_true',
+                    help='propagate the error (equations in option 2.1 in timeseries2velocity.py):\n'
+                         '  if --uncertainty=`covariance` and --ts-cov is given, then C_d = --ts-cov\n'
+                         '  if --uncertainty=`residue` (C_d = sigma^2 * I) or `bootstrap`, no effects\n')
     uq.add_argument('--ts-cov','--ts-cov-file', dest='timeSeriesCovFile',
                     help='4D time-series (co)variance file for time function STD calculation')
     uq.add_argument('--bc', '--bootstrap-count', dest='bootstrapCount', type=int, default=400,

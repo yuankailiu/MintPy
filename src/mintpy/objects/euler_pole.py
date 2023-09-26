@@ -703,13 +703,14 @@ def plot_plate_motion(plate_boundary, epole_obj, center_lalo=None, qscale=200, q
     kwargs['pts_mec']     = kwargs.get('pts_mec', 'k')
     kwargs['pts_mew']     = kwargs.get('pts_mew', 1)
 
-    # map projection
-    # based on: 1) map center and 2) satellite_height
-    if not center_lalo:
-        if kwargs['pts_lalo']:
+    # map projection is based on: map center and satellite_height
+    # map center
+    if not isinstance(center_lalo, (list, tuple, np.ndarray)):
+        if center_lalo == 'point':
             center_lalo = kwargs['pts_lalo']
         else:
             center_lalo = np.array(plate_boundary.centroid.coords)[0]
+    print(f'Map center at ({center_lalo[0]:.1f}N, {center_lalo[1]:.1f}E)')
     map_proj = ccrs.NearsidePerspective(center_lalo[1], center_lalo[0], satellite_height=satellite_height)
 
     # make a base map from cartopy

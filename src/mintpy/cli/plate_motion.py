@@ -78,6 +78,8 @@ def create_parser(subparsers=None):
                         help='Input velocity file to be corrected.')
     parser.add_argument('-o', '--output', dest='cor_vel_file', type=str,
                         help='Output velocity file after the correction, default: add "_ITRF14" suffix.')
+    parser.add_argument('-s', '--saveitrf', dest='save_itrf', type=str, default=None,
+                        help='Output ITRF reference file, default: "ITRF14.h5" in the geom file folder.')
 
     # plate motion calculation
     parser.add_argument('--comp', dest='pmm_comp', choices={'enu2los', 'en2az'}, default='enu2los',
@@ -106,10 +108,15 @@ def cmd_line_parse(iargs=None):
 
     # default: output PMM filenames
     geom_dir = os.path.dirname(inps.geom_file)
-    inps.pmm_enu_file = os.path.join(geom_dir, 'ITRF14enu.h5')
-    inps.pmm_file = os.path.join(geom_dir, 'ITRF14.h5')
-    if inps.pmm_comp.endswith('2az'):
-        inps.pmm_file = os.path.join(geom_dir, 'ITRF14az.h5')
+    if inps.save_itrf:
+      base, ext = os.path.splitext(inps.save_itrf)
+      inps.pmm_file = os.path.abspath(inps.save_itrf)
+      inps.pmm_enu_file = os.path.abspath(f'{base}enu{ext}')
+    else:
+      inps.pmm_enu_file = os.path.join(geom_dir, 'ITRF14enu.h5')
+      inps.pmm_file = os.path.join(geom_dir, 'ITRF14.h5')
+      if inps.pmm_comp.endswith('2az'):
+          inps.pmm_file = os.path.join(geom_dir, 'ITRF14az.h5')
 
     # default: --output option
     if inps.vel_file and not inps.cor_vel_file:

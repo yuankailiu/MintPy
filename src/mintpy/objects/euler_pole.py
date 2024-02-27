@@ -222,8 +222,14 @@ class EulerPole:
         ve, vn, vu = pole_obj.get_velocity_enu(lats, lons, alt=0.0) # in local ENU coordinate
     """
 
-    def __init__(self, wx=None, wy=None, wz=None, pole_lat=None, pole_lon=None, rot_rate=None,
-                 unit='mas/yr', name=None):
+    def __init__(self, name=None, wx=None, wy=None, wz=None,
+                 pole_lat=None, pole_lon=None, rot_rate=None, unit='mas/yr'):
+        # check if name is provided
+        if name is not None:
+            if name in ITRF2014_PMM:
+                # if name is given properly, read from table directly
+                wx, wy, wz = ITRF2014_PMM[name].omega_x, ITRF2014_PMM[name].omega_y, ITRF2014_PMM[name].omega_z
+
         # check - unit
         if unit.lower().startswith('mas'):
             unit = 'mas/yr'
@@ -235,6 +241,13 @@ class EulerPole:
             wy = wy / MASY2DMY if wy else None
             wz = wz / MASY2DMY if wz else None
             rot_rate = rot_rate / MASY2DMY if rot_rate else None
+        elif unit.lower().startswith('rad'):
+            unit = 'rad/yr'
+            # convert input rad/yr to mas/yr for internal calculation
+            wx = wx / MAS2RAD if wx else None
+            wy = wy / MAS2RAD if wy else None
+            wz = wz / MAS2RAD if wz else None
+            rot_rate = rot_rate / MAS2RAD if rot_rate else None
 
         else:
             raise ValueError(f'Unrecognized rotation rate unit: {unit}! Use mas/yr or deg/Ma')
@@ -412,7 +425,30 @@ class EulerPole:
 
 ####################################  Utility functions  #################################################
 # Utility functions for the math/geometry operations of Euler Pole and linear velocity
-# reference: https://yuankailiu.github.io/assets/docs/Euler_pole_doc.pdf
+# Reference:
+#   1. Euler pole forward formulation:
+#       + https://yuankailiu.github.io/assets/docs/Euler_pole_doc.pdf
+#         (need a proper reference here...)
+#   2. Uncertainty propagation:
+#       + https://github.com/tobiscode/disstans
+#       + Goudarzi, M. A., Cocard, M., & Santerre, R. (2014),*EPC: Matlab software to estimate Euler pole parameters*,GPS Solutions, 18(1), 153–162,
+#         doi:`10.1007/s10291-013-0354-4 <https://doi.org/10.1007/s10291-013-0354-4
+def cart2sph_err(w_x, w_y, w_z, rotation_covariance):
+    """
+    Adapted from disstans/disstans/tools.py (https://github.com/tobiscode/disstans/blob/656c8be6d3d948f66fe091c7e3982e85ee6604cb/disstans/tools.py#L1688)
+    Reference: Goudarzi et al., 2014, equation 18
+    """
+    w_xy_mag = np.linalg.norm(np.array([w_x, w_y]))
+    w_mag    = np.linalg.norm(np.array([w_x, w_y, w_z]))
+    jac = np.array([
+                    [-w_x*w_z / (w_xy_mag * w_mag**2), -w_y*w_z / (w_xy_mag * w_mag**2), -w_xy_mag / w_mag**2], # Latitude
+                    [-w_y / w_xy_mag**2              ,  w_x / w_xy_mag**2              ,  0                  ], # Longitude
+                    [ w_x / w_mag                    ,  w_y / w_mag                    ,  w_z / w_mag        ]  # Rotation rate
+                    ])
+    euler_pole_covariance = jac @ rotation_covariance @ jac.T
+    return euler_pole_covariance
+
+
 def cart2sph(rx, ry, rz):
     """Convert cartesian coordinates to spherical.
 
@@ -542,6 +578,18 @@ def transform_xyz_enu(lat, lon, x=None, y=None, z=None, e=None, n=None, u=None):
 # check usage: https://github.com/yuankailiu/utils/blob/main/notebooks/PMM_plot.ipynb
 # Later will be moved to a separate script `plot_utils.py` in plate motion package
 
+def update_projection(axs, axi, projection, fig=None):
+    """ https://stackoverflow.com/a/75485793
+    axs  : all subplot axes
+    axi  : current subplot axis
+    """
+    if fig is None: fig = plt.gcf()
+    rows, cols, start, stop = axi.get_subplotspec().get_geometry()
+    axs.flat[start].remove()
+    axs.flat[start] = fig.add_subplot(rows, cols, start+1, projection=projection)
+    return fig, axs.flat[start]
+
+
 def read_plate_outline(pmm_name='GSRM', plate_name=None):
     """Read the plate boundaries for the given plate motion model.
 
@@ -626,7 +674,7 @@ def read_plate_outline(pmm_name='GSRM', plate_name=None):
 
 
 def plot_plate_motion(plate_boundary, epole_obj, center_lalo=None, qscale=200, qunit=50,
-                      satellite_height=1e6, figsize=[5, 5], **kwargs):
+                      satellite_height=1e6, figsize=[5, 5], axes=None, **kwargs):
     """Plot the globe map wityh plate boundary, quivers on some points.
 
     Parameters: plate_boundary   - shapely.geometry.Polygon object
@@ -695,6 +743,7 @@ def plot_plate_motion(plate_boundary, epole_obj, center_lalo=None, qscale=200, q
     kwargs['grid_lw']     = kwargs.get('grid_lw', 0.3)
     kwargs['grid_lc']     = kwargs.get('grid_lc', 'gray')
     kwargs['qnum']        = kwargs.get('qnum', 6)
+    kwargs['font_size']   = kwargs.get('font_size', 12)
     # point of interest
     kwargs['pts_lalo']    = kwargs.get('pts_lalo', None)
     kwargs['pts_marker']  = kwargs.get('pts_marker', '^')
@@ -703,17 +752,38 @@ def plot_plate_motion(plate_boundary, epole_obj, center_lalo=None, qscale=200, q
     kwargs['pts_mec']     = kwargs.get('pts_mec', 'k')
     kwargs['pts_mew']     = kwargs.get('pts_mew', 1)
 
-    # map projection
-    # based on: 1) map center and 2) satellite_height
-    if not center_lalo:
-        if kwargs['pts_lalo']:
+    if epole_obj:
+        pole_lalo = np.array([epole_obj.poleLat, epole_obj.poleLon])
+    if plate_boundary:
+        bnd_centroid = np.array(plate_boundary.centroid.coords)[0]
+
+    # map projection is based on: map center and satellite_height
+    # map center
+    if not isinstance(center_lalo, (list, tuple, np.ndarray)):
+        if center_lalo == 'point':
             center_lalo = kwargs['pts_lalo']
+        elif center_lalo == 'pole' and epole_obj:
+            center_lalo = pole_lalo
+            if kwargs['pts_lalo'] is None:
+                kwargs['pts_lalo'] = pole_lalo
+        elif center_lalo == 'mid' and epole_obj:
+            if abs(pole_lalo[1] - bnd_centroid[1]) < 90.:
+                center_lalo = np.array([(pole_lalo[0] + bnd_centroid[0])/2,
+                                        (pole_lalo[1] + bnd_centroid[1])%360/2])
+            else:
+                center_lalo = bnd_centroid
+            if kwargs['pts_lalo'] is None:
+                kwargs['pts_lalo'] = pole_lalo
         else:
-            center_lalo = np.array(plate_boundary.centroid.coords)[0]
+            center_lalo = bnd_centroid
+    print(f'Map center at ({center_lalo[0]:.1f}N, {center_lalo[1]:.1f}E)')
     map_proj = ccrs.NearsidePerspective(center_lalo[1], center_lalo[0], satellite_height=satellite_height)
 
     # make a base map from cartopy
-    fig, ax = plt.subplots(figsize=figsize, subplot_kw=dict(projection=map_proj))
+    if axes is None:
+        fig, ax = plt.subplots(figsize=figsize, subplot_kw=dict(projection=map_proj))
+    else:
+        fig, ax = update_projection(axes[0], axes[1], map_proj)
     ax.set_global()
     ax.gridlines(color=kwargs['grid_lc'],
                  linestyle=kwargs['grid_ls'],
@@ -756,11 +826,14 @@ def plot_plate_motion(plate_boundary, epole_obj, center_lalo=None, qscale=200, q
                           width=.0075, color='coral', angles="xy")
             # legend
             # put an empty title for extra whitepace at the top
-            ax.set_title('  ', pad=10)
-            ax.quiverkey(q, X=0.3, Y=0.9, U=qunit, label=f'{qunit} mm/yr', labelpos='E', coordinates='figure')
+            #ax.set_title('  ', pad=10)
+            if axes is None:
+                ax.quiverkey(q, X=0.6, Y=0.1, U=qunit, label=f'{qunit} mm/yr', labelpos='E', coordinates='axes', color='k', fontproperties={'size':kwargs['font_size']})
+            else:
+                axes[0][-1].quiverkey(q, X=0.6, Y=0.1, U=qunit, label=f'{qunit} mm/yr', labelpos='E', coordinates='axes', color='k', fontproperties={'size':kwargs['font_size']})
 
     # add custom points (e.g., show some points of interest)
-    if kwargs['pts_lalo']:
+    if kwargs['pts_lalo'] is not None:
         ax.scatter(kwargs['pts_lalo'][1], kwargs['pts_lalo'][0],
                    marker=kwargs['pts_marker'], s=kwargs['pts_ms'],
                    fc=kwargs['pts_mfc'], ec=kwargs['pts_mec'],

@@ -54,11 +54,11 @@ def create_parser(subparsers=None):
         name, synopsis=synopsis, description=synopsis, epilog=epilog, subparsers=subparsers)
 
     # input files
-    parser.add_argument('file', nargs=2,
+    parser.add_argument('file', nargs='+',
                         help='Ascending and descending files\n'
                              'Both files need to be geocoded in the same spatial resolution.')
     parser.add_argument('-d', '--dset', dest='ds_name', type=str, help='dataset to use, default: 1st dataset')
-    parser.add_argument('-g','--geom-file', dest='geom_file', nargs=2, help='Geometry files for the input data files.')
+    parser.add_argument('-g','--geom-file', dest='geom_file', nargs='+', help='Geometry files for the input data files.')
 
     # inputs - checking
     parser.add_argument('--max-ref-yx-diff', dest='max_ref_yx_diff', type=int, default=3,
@@ -77,6 +77,15 @@ def create_parser(subparsers=None):
                              'b. Near north direction can not be well resolved due to the lack of\n'
                              '   diversity in viewing geometry. Check exact dilution of precision for \n'
                              '   each component in Wright et al. (2004, GRL)')
+
+    # output - weighted least squares
+    parser.add_argument('-w', '--wstd', dest='w_std', action='store_true', help='use Std dataset as weights if exists, default: False')
+
+    # outputs - refenrece point
+    parser.add_argument('--ref-lalo','--ref-point', dest='ref_lalo', nargs=2, metavar=('REF_LAT', 'REF_LON'), type=float, default=[None,None],
+                      help='Specify the reference point for the output file if not in the metadata of input .h5 file\n'+
+                           'Or when you are inputing more than one set of asc/dsc datasets, and you have pre-referenced them yourself!\n'+
+                           'This will skip auto-checking for each of the .h5 files')
 
     # output - data files
     parser.add_argument('-o', '--output', dest='outfile', nargs=2, metavar=('HZ_FILE','UP_FILE'), default=['hz.h5', 'up.h5'],
@@ -117,17 +126,21 @@ def cmd_line_parse(iargs=None):
         raise ValueError(f'input files do NOT have the same spatial resolution\n{msg}')
 
     # check: if input reference points are consistent
-    ref_lat1, ref_lon1 = (float(atr1[i]) for i in ['REF_LAT', 'REF_LON'])
-    ref_lat2, ref_lon2 = (float(atr2[i]) for i in ['REF_LAT', 'REF_LON'])
-    ref_y_diff = abs((ref_lat1 - ref_lat2) / float(atr1['Y_STEP']))
-    ref_x_diff = abs((ref_lon1 - ref_lon2) / float(atr1['X_STEP']))
-    if any(ref_diff > inps.max_ref_yx_diff for ref_diff in [ref_y_diff, ref_x_diff]):
-        msg = f'REF_LAT/LON difference between input files > {inps.max_ref_yx_diff} pixels!\n'
-        for fname, ref_lat, ref_lon in zip(inps.file, [ref_lat1, ref_lat2], [ref_lon1, ref_lon2]):
-            msg += f'file: {fname}\n'
-            msg += f'\tREF_LAT/LON: [{ref_lat:.8f}, {ref_lon:.8f}]\n'
-        raise ValueError(msg)
-
+    if any(key is None for key in inps.ref_lalo):
+        ref_lat1, ref_lon1 = (float(atr1[i]) for i in ['REF_LAT', 'REF_LON'])
+        ref_lat2, ref_lon2 = (float(atr2[i]) for i in ['REF_LAT', 'REF_LON'])
+        ref_y_diff = abs((ref_lat1 - ref_lat2) / float(atr1['Y_STEP']))
+        ref_x_diff = abs((ref_lon1 - ref_lon2) / float(atr1['X_STEP']))
+        if any(ref_diff > inps.max_ref_yx_diff for ref_diff in [ref_y_diff, ref_x_diff]):
+            msg = f'REF_LAT/LON difference between input files > {inps.max_ref_yx_diff} pixels!\n'
+            for fname, ref_lat, ref_lon in zip(inps.file, [ref_lat1, ref_lat2], [ref_lon1, ref_lon2]):
+                msg += f'file: {fname}\n'
+                msg += f'\tREF_LAT/LON: [{ref_lat:.8f}, {ref_lon:.8f}]\n'
+            raise ValueError(msg)
+    else:
+        print(f':: You have forcely specified a reference point for the output file, REF_LAT/REF_LON: {inps.ref_lalo[0]}/{inps.ref_lalo[1]}')
+        print(f':: this means you have pre-referenced all these input files by yourself, right?')
+        print(f':: the code will ignore auto-checking for consistent reference point for each input files')
     return inps
 
 

@@ -112,17 +112,22 @@ def read_inps2dict(inps):
     if iDict['compression'] is False:
         iDict['compression'] = None
 
+    iDict['numWorker'] = int(template['mintpy.compute.numWorker'])
+
     # group - multilook
     prefix = 'mintpy.multilook.'
     key_list = [i.split(prefix)[1] for i in template.keys() if i.startswith(prefix)]
     for key in key_list:
         value = template[prefix+key]
-        if key in ['xstep', 'ystep', 'method']:
+        if key in ['xstep', 'ystep', 'method', 'noDataVal']:
             iDict[key] = template[prefix+key]
 
     iDict['xstep']  = int(iDict.get('xstep', 1))
     iDict['ystep']  = int(iDict.get('ystep', 1))
     iDict['method'] = str(iDict.get('method', 'nearest'))
+    iDict['noDataVal'] = str(iDict.get('noDataVal', None))
+    if iDict['noDataVal'].lower() == 'none':
+        iDict['noDataVal'] = None
 
     # PROJECT_NAME --> PLATFORM
     if not iDict['PROJECT_NAME']:
@@ -924,6 +929,7 @@ def load_data(inps):
     print('compression: {}'.format(iDict['compression']))
     print('multilook x/ystep: {}/{}'.format(iDict['xstep'], iDict['ystep']))
     print('multilook method : {}'.format(iDict['method']))
+    print('multilook no-data value : {}'.format(iDict['noDataVal']))
     kwargs = dict(updateMode=iDict['updateMode'], xstep=iDict['xstep'], ystep=iDict['ystep'])
 
     # read subset info [need the metadata from above]
@@ -987,6 +993,8 @@ def load_data(inps):
                 xstep=iDict['xstep'],
                 ystep=iDict['ystep'],
                 mli_method=iDict['method'],
+                no_data_values=iDict['noDataVal'],
+                n_procs=iDict['numWorker'],
                 compression=iDict['compression'],
                 extra_metadata=extraDict,
                 geom_obj=geom_obj)
@@ -1023,6 +1031,8 @@ def load_data(inps):
                 xstep=iDict['xstep'],
                 ystep=iDict['ystep'],
                 mli_method=iDict['method'],
+                no_data_values=iDict['noDataVal'],
+                n_procs=iDict['numWorker'],
                 compression=iDict['compression'],
                 extra_metadata=extraDict,
                 geom_obj=geom_obj)

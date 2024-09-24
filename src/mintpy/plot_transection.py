@@ -10,6 +10,7 @@ import os
 from matplotlib import pyplot as plt, ticker
 
 from mintpy import view
+from mintpy.objects.coord import coordinate
 from mintpy.utils import plot as pp, readfile, utils as ut
 
 
@@ -83,6 +84,7 @@ class transectionViewer():
         self.atr_list = []
         for fname in self.file:
             data, atr = readfile.read(fname, datasetName=self.dset)
+            self.coord = coordinate(atr)
             data = pp.scale_data2disp_unit(data, metadata=atr, disp_unit=self.disp_unit)[0]
             self.data_list.append(data)
             self.atr_list.append(atr)
@@ -97,6 +99,9 @@ class transectionViewer():
         self.ax_txn.yaxis.tick_right()
         self.ax_txn.yaxis.set_label_position("right")
 
+        if self.ref_lalo:
+            self.ref_y = self.coord.lalo2yx(self.ref_lalo[0], coord_type='lat')
+            self.ref_x = self.coord.lalo2yx(self.ref_lalo[1], coord_type='lon')
         # plot initial input transect
         if self.start_yx and self.end_yx:
             self.draw_line(self.start_yx, self.end_yx)
@@ -219,11 +224,16 @@ class transectionViewer():
                 dist_scale = 0.001
                 dist_unit = 'km'
 
+            # referencing the transects data
+            ref_val = 0.
+            if hasattr(self, "ref_y"):
+                ref_val = self.data_list[i][self.ref_y, self.ref_x]
+
             # plot
             # update distance values by excluding the commonly masked out pixels in the beginning
             self.ax_txn.scatter(
                 x=(txn['distance'] - min_dist) * dist_scale,
-                y=txn['value'] - self.offset[i],
+                y=txn['value'] - self.offset[i] - ref_val,
                 c=f'C{i}',
                 s=self.marker_size**2)
 

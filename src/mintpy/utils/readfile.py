@@ -353,6 +353,9 @@ def read(fname, box=None, datasetName=None, print_msg=True, xstep=1, ystep=1, da
     length, width = int(atr['LENGTH']), int(atr['WIDTH'])
     if not box:
         box = (0, 0, width, length)
+    else:
+        width = box[2] - box[0]
+        length = box[3] - box[1]
 
     # read data
     kwargs = dict(
@@ -367,6 +370,8 @@ def read(fname, box=None, datasetName=None, print_msg=True, xstep=1, ystep=1, da
         data = read_hdf5_file(fname, print_msg=print_msg, **kwargs)
 
     else:
+        #if fname.endswith('.vrt'):  # feeling unsure why I wanted to do that last time??
+        #    fname = fname.split('.')[0]
         data, atr = read_binary_file(fname, **kwargs)
 
     # customized output data type
@@ -379,7 +384,27 @@ def read(fname, box=None, datasetName=None, print_msg=True, xstep=1, ystep=1, da
     if isinstance(no_data_values, list):
         if print_msg:
             print(f'convert no-data-value from {no_data_values[0]} to {no_data_values[1]}')
-        data[data == no_data_values[0]] = no_data_values[1]
+
+        # reshape for ndim=2, and keep track of the reference pixel value
+        ndim = data.ndim
+        ref_val = None
+        if all([key in atr for key in ['REF_Y', 'REF_X']]):
+            ref_y, ref_x  = int(atr['REF_Y'])-box[1], int(atr['REF_X'])-box[0]
+            data = data.reshape(-1, length, width)
+            ref_val = data[0, ref_y, ref_x]
+
+        # convert no-data-value
+        if no_data_values[0] is np.nan:
+            data[np.isnan(data)] = no_data_values[1]
+        else:
+            data[data == no_data_values[0]] = no_data_values[1]
+
+        # put back the reference value
+        if ref_val is not None:
+            data[:, ref_y, ref_x] = ref_val
+            # reshape back
+            if ndim == 2:
+                data = data.reshape(length, width)
 
     return data, atr
 
@@ -550,6 +575,11 @@ def read_hdf5_file(fname, datasetName=None, box=None, xstep=1, ystep=1, print_ms
 
             if any(i == 1 for i in data.shape):
                 data = np.squeeze(data)
+
+        # 1D dataset (bperp, dropIfgram)
+        if ds.ndim == 1:
+            # read data
+            data = np.array(ds)
 
     return data
 

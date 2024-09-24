@@ -42,29 +42,49 @@ PLATE_BOUNDARY_FILE = {
 #################################  Plate Motion Models  ########################################
 # Later will be moved to a separate script `pmm.py` in plate motion package
 
-# 1). ITRF2014-PMM defined in Altamimi et al. (2017)
-# Reference frame: ITRF2014
-Tag = collections.namedtuple('Tag', 'Abbrev num_site omega_x omega_y omega_z omega wrms_e wrms_n')
+# 1). ITRF Plate Motion Model
+# Reference frame: ITRF2014 (Altamimi et al., 2017)
+Tag = collections.namedtuple('Tag', 'Abbrev num_site omega_x omega_y omega_z omega \
+                                     omega_x_sig omega_y_sig omega_z_sig omega_sig wrms_e wrms_n')
 ITRF2014_PMM = {
-    'Antartica'     : Tag('ANTA'  ,   7,  -0.248,  -0.324,   0.675,  0.219,  0.20,  0.16),
-    'Arabia'        : Tag('ARAB'  ,   5,   1.154,  -0.136,   1.444,  0.515,  0.36,  0.43),
-    'Australia'     : Tag('AUST'  ,  36,   1.510,   1.182,   1.215,  0.631,  0.24,  0.20),
-    'Eurasia'       : Tag('EURA'  ,  97,  -0.085,  -0.531,   0.770,  0.261,  0.23,  0.19),
-    'India'         : Tag('INDI'  ,   3,   1.154,  -0.005,   1.454,  0.516,  0.21,  0.21),
-    'Nazca'         : Tag('NAZC'  ,   2,  -0.333,  -1.544,   1.623,  0.629,  0.13,  0.19),
-    'NorthAmerica'  : Tag('NOAM'  ,  72,   0.024,  -0.694,  -0.063,  0.194,  0.23,  0.28),
-    'Nubia'         : Tag('NUBI'  ,  24,   0.099,  -0.614,   0.733,  0.267,  0.28,  0.36),
-    'Pacific'       : Tag('PCFC'  ,  18,  -0.409,   1.047,  -2.169,  0.679,  0.36,  0.31),
-    'SouthAmerica'  : Tag('SOAM'  ,  30,  -0.270,  -0.301,  -0.140,  0.119,  0.34,  0.35),
-    'Somalia'       : Tag('SOMA'  ,   3,  -0.121,  -0.794,   0.884,  0.332,  0.32,  0.30),
+    'Antartica'    : Tag('ANTA',  7, -0.248, -0.324,  0.675, 0.219, 0.004, 0.004, 0.008, 0.002, 0.20, 0.16),
+    'Arabia'       : Tag('ARAB',  5,  1.154, -0.136,  1.444, 0.515, 0.020, 0.022, 0.014, 0.006, 0.36, 0.43),
+    'Australia'    : Tag('AUST', 36,  1.510,  1.182,  1.215, 0.631, 0.004, 0.004, 0.004, 0.001, 0.24, 0.20),
+    'Eurasia'      : Tag('EURA', 97, -0.085, -0.531,  0.770, 0.261, 0.004, 0.002, 0.005, 0.001, 0.23, 0.19),
+    'India'        : Tag('INDI',  3,  1.154, -0.005,  1.454, 0.516, 0.027, 0.117, 0.035, 0.012, 0.21, 0.21),
+    'Nazca'        : Tag('NAZC',  2, -0.333, -1.544,  1.623, 0.629, 0.006, 0.015, 0.007, 0.002, 0.13, 0.19),
+    'NorthAmerica' : Tag('NOAM', 72,  0.024, -0.694, -0.063, 0.194, 0.002, 0.005, 0.004, 0.001, 0.23, 0.28),
+    'Nubia'        : Tag('NUBI', 24,  0.099, -0.614,  0.733, 0.267, 0.004, 0.003, 0.003, 0.001, 0.28, 0.36),
+    'Pacific'      : Tag('PCFC', 18, -0.409,  1.047, -2.169, 0.679, 0.003, 0.004, 0.004, 0.001, 0.36, 0.31),
+    'SouthAmerica' : Tag('SOAM', 30, -0.270, -0.301, -0.140, 0.119, 0.006, 0.006, 0.003, 0.001, 0.34, 0.35),
+    'Somalia'      : Tag('SOMA',  3, -0.121, -0.794,  0.884, 0.332, 0.035, 0.034, 0.008, 0.008, 0.32, 0.30),
+}
+# Reference frame: ITRF2020 (Altamimi et al., 2023)
+ITRF2020_PMM = {
+    'Amur'         : Tag('AMUR',  3, -0.131, -0.551,  0.837, 0.281, 0.009, 0.014, 0.015, 0.002, 0.17, 0.18),
+    'Antartica'    : Tag('ANTA', 15, -0.269, -0.321,  0.678, 0.220, 0.003, 0.003, 0.004, 0.001, 0.16, 0.24),
+    'Arabia'       : Tag('ARAB',  3,  1.129, -0.146,  1.438, 0.509, 0.025, 0.027, 0.016, 0.007, 0.15, 0.11),
+    'Australia'    : Tag('AUST',118,  1.487,  1.175,  1.223, 0.627, 0.003, 0.003, 0.003, 0.001, 0.19, 0.17),
+    'Caribbean'    : Tag('CARB',  5,  0.207, -1.422,  0.726, 0.447, 0.076, 0.174, 0.061, 0.053, 0.18, 0.56),
+    'Eurasia'      : Tag('EURA',143, -0.085, -0.519,  0.753, 0.255, 0.003, 0.003, 0.003, 0.001, 0.19, 0.21),
+    'India'        : Tag('INDI',  4,  1.137,  0.013,  1.444, 0.511, 0.008, 0.040, 0.016, 0.005, 0.41, 0.33),
+    'Nazca'        : Tag('NAZC',  3, -0.327, -1.561,  1.605, 0.629, 0.006, 0.018, 0.008, 0.003, 0.05, 0.10),
+    'NorthAmerica' : Tag('NOAM',108,  0.045, -0.666, -0.098, 0.187, 0.003, 0.003, 0.003, 0.001, 0.23, 0.31),
+    'Nubia'        : Tag('NUBI', 31,  0.090, -0.585,  0.717, 0.258, 0.003, 0.003, 0.004, 0.001, 0.18, 0.21),
+    'Pacific'      : Tag('PCFC', 20, -0.404,  1.021, -2.154, 0.672, 0.003, 0.003, 0.004, 0.001, 0.32, 0.30),
+    'SouthAmerica' : Tag('SOAM', 59, -0.261, -0.282, -0.157, 0.115, 0.004, 0.004, 0.003, 0.001, 0.30, 0.29),
+    'Somalia'      : Tag('SOMA',  6, -0.081, -0.719,  0.864, 0.313, 0.014, 0.015, 0.005, 0.004, 0.41, 0.21),
 }
 PMM_UNIT = {
-    'omega'   : 'deg/Ma',  # degree per megayear or one-million-year
-    'omega_x' : 'mas/yr',  # milli-arcsecond per year
-    'omega_y' : 'mas/yr',  # milli-arcsecond per year
-    'omega_z' : 'mas/yr',  # milli-arcsecond per year
-    'wrms_e'  : 'mm/yr',   # milli-meter per year, weighted root mean scatter
-    'wrms_n'  : 'mm/yr',   # milli-meter per year, weighted root mean scatter
+    'omega'       : 'deg/Ma',  # degree per million year
+    'omega_x'     : 'mas/yr',  # milli-arcsecond per year
+    'omega_y'     : 'mas/yr',  # milli-arcsecond per year
+    'omega_z'     : 'mas/yr',  # milli-arcsecond per year
+    'omega_x_sig' : 'mas/yr',  # milli-arcsecond per year
+    'omega_y_sig' : 'mas/yr',  # milli-arcsecond per year
+    'omega_z_sig' : 'mas/yr',  # milli-arcsecond per year
+    'wrms_e'      : 'mm/yr',   # milli-meter per year, weighted root mean scatter
+    'wrms_n'      : 'mm/yr',   # milli-meter per year, weighted root mean scatter
 }
 
 
@@ -72,7 +92,7 @@ PMM_UNIT = {
 # Reference frame: IGS08
 # (unit: Lat: °N; Lon: °E; omega: °/Ma)
 Tag = collections.namedtuple('Tag', 'Abbrev Lat Lon omega')
-GSRM_V21_PMM = {
+GSRM_NNR_V2_1_PMM = {
     'Africa'          : Tag('AF'  , 49.66   ,  -78.08   , 0.285),
     'Amur'            : Tag('AM'  , 61.64   ,  -101.29  , 0.287),
     'Antarctica'      : Tag('AN'  , 60.08   ,  -120.14  , 0.234),
@@ -213,7 +233,9 @@ EXAMPLE = """Define an Euler pole:
 
 class EulerPole:
     """EulerPole object to compute velocity for a given tectonic plate.
-
+        The coordinate system convention:
+         cartesian expression - ECEF {x,y,z} coordinate, where (x axis (0°N °E), y axis (0°N 90°E), and z axis (90°N))
+         spherical expression - WG84 ellipsoid {lat,lon,rate}
     Example:
         # compute velocity of the Eurasia plate in ITRF2014-PMM from Altamimi et al. (2017)
         pole_obj = EulerPole(pole_lat=55.070, pole_lon=-99.095, rot_rate=0.939, unit='mas/yr')
@@ -222,13 +244,19 @@ class EulerPole:
         ve, vn, vu = pole_obj.get_velocity_enu(lats, lons, alt=0.0) # in local ENU coordinate
     """
 
-    def __init__(self, name=None, wx=None, wy=None, wz=None,
+    def __init__(self, name=None, itrf='2014', wx=None, wy=None, wz=None,
+                 wx_sig=None, wy_sig=None, wz_sig=None,
                  pole_lat=None, pole_lon=None, rot_rate=None, unit='mas/yr'):
         # check if name is provided
         if name is not None:
-            if name in ITRF2014_PMM:
-                # if name is given properly, read from table directly
-                wx, wy, wz = ITRF2014_PMM[name].omega_x, ITRF2014_PMM[name].omega_y, ITRF2014_PMM[name].omega_z
+            if   itrf == '2014': PMM = ITRF2014_PMM
+            elif itrf == '2020': PMM = ITRF2020_PMM
+            if name in PMM: # if name is given properly, read from table directly
+                print(f'an existing plate in ITRF{itrf} table: {name}')
+                wx, wy, wz = PMM[name].omega_x, PMM[name].omega_y, PMM[name].omega_z
+                wx_sig, wy_sig, wz_sig = PMM[name].omega_x_sig, PMM[name].omega_y_sig, PMM[name].omega_z_sig
+            else:
+                print(f'a user-defined new plate: {name}')
 
         # check - unit
         if unit.lower().startswith('mas'):
@@ -240,6 +268,9 @@ class EulerPole:
             wx = wx / MASY2DMY if wx else None
             wy = wy / MASY2DMY if wy else None
             wz = wz / MASY2DMY if wz else None
+            wx_sig = wx_sig / MASY2DMY if wx_sig else None
+            wy_sig = wy_sig / MASY2DMY if wy_sig else None
+            wz_sig = wz_sig / MASY2DMY if wz_sig else None
             rot_rate = rot_rate / MASY2DMY if rot_rate else None
         elif unit.lower().startswith('rad'):
             unit = 'rad/yr'
@@ -247,6 +278,9 @@ class EulerPole:
             wx = wx / MAS2RAD if wx else None
             wy = wy / MAS2RAD if wy else None
             wz = wz / MAS2RAD if wz else None
+            wx_sig = wx_sig / MAS2RAD if wx_sig else None
+            wy_sig = wy_sig / MAS2RAD if wy_sig else None
+            wz_sig = wz_sig / MAS2RAD if wz_sig else None
             rot_rate = rot_rate / MAS2RAD if rot_rate else None
 
         else:
@@ -266,13 +300,15 @@ class EulerPole:
 
         # save member variables
         self.name = name
-        self.poleLat = pole_lat   # Euler pole latitude   [degree]
-        self.poleLon = pole_lon   # Euler pole longitude  [degree]
-        self.rotRate = rot_rate   # angular rotation rate [mas/yr]
-        self.wx = wx              # angular velocity x    [mas/yr]
-        self.wy = wy              # angular velocity y    [mas/yr]
-        self.wz = wz              # angular velocity z    [mas/yr]
-
+        self.poleLat = pole_lat   # Euler pole latitude      [degree]
+        self.poleLon = pole_lon   # Euler pole longitude     [degree]
+        self.rotRate = rot_rate   # angular rotation rate    [mas/yr]
+        self.wx = wx              # angular velocity x       [mas/yr]
+        self.wy = wy              # angular velocity y       [mas/yr]
+        self.wz = wz              # angular velocity z       [mas/yr]
+        self.wx_sig = wx_sig      # angular velocity x sig   [mas/yr]
+        self.wy_sig = wy_sig      # angular velocity y sig   [mas/yr]
+        self.wz_sig = wz_sig      # angular velocity z sig   [mas/yr]
 
     def __repr__(self):
         msg = f'{self.__class__.__name__}(name={self.name}, poleLat={self.poleLat}, poleLon={self.poleLon}, '
@@ -321,6 +357,136 @@ class EulerPole:
         return EulerPole(wx=new_wx, wy=new_wy, wz=new_wz)
 
 
+    def append_to_pole(self, inDict):
+        # assign to the pole object
+        for k, v in inDict.items():
+            setattr(self, k, v)
+
+
+    def get_uncertainty(self, block=None, in_err=None, src='tableStd', append=True):
+        """Convert the uncertainty between different units
+            + Rotational pole/uncertainty can have the following two interchangeable expressions:
+                cartesian expression - ECEF {x,y,z} coordinate, where (x axis (0°N °E), y axis (0°N 90°E), and z axis (90°N))
+                spherical expression - WG84 ellipsoid {lat,lon,rate}
+            + Can take the input uncertainty from
+                (1.1) tableStd  -  Euler pole model table (ITRF2014, ITRF2020 PMM): cartesian express.
+                (1.2) tableCov  -  Euler pole model table (MORVEL, GSRM PMM): cartesian express.
+                (2)   block     -  Block model object: cartesian express.
+                (3)   in_err    -  User input error
+            + If append==True, will append the unceratinty to the Euler pole object
+        """
+        xyz_std     = None
+        xyz_cov     = None
+        xyz_mas_std = None
+        xyz_deg_std = None
+        sph_lat_std = None
+        sph_lon_std = None
+        sph_mas_std = None
+        sph_deg_std = None
+
+        # 1.1. cartesian expression: sigma from Euler pole table. default [mas/time]
+        if src == 'tableStd':
+            xyz_mas_std = np.array([self.wx_sig, self.wy_sig, self.wz_sig])
+            xyz_std     = xyz_mas_std * MAS2RAD         # rad/year
+            xyz_deg_std = np.rad2deg(xyz_std*1e6)       # deg/Ma
+            xyz_cov     = np.diag(xyz_std**2)           # rad^2/year^2
+
+        # 1.2. cartesian expression: ULL covariance matrix from Euler pole table. default [mas/time]
+        elif src == 'tableCov':
+            print('!!! code is not ready...')
+
+        # 2. cartesian expression: FULL covariance matrix from block object. default [rad/time]
+        elif src == 'block':
+            xyz_cov     = block.Cm[:3,:3]               # rad^2/year^2
+            xyz_std     = np.diag(xyz_cov)**0.5         # rad/year
+            xyz_mas_std = xyz_std/MAS2RAD               # mas/year
+            xyz_deg_std = np.rad2deg(xyz_std*1e6)       # deg/Ma
+
+        # 3. user-input errors
+        elif src == 'in_err':
+            # cartesian expression: sigma. [mas/year] or [deg/Ma]
+            if 'xyz_mas_std' in in_err:
+                xyz_mas_std = np.array(in_err['xyz_mas_std']) # mas/year
+                xyz_std     = xyz_mas_std * MAS2RAD           # rad/year
+                xyz_cov     = np.diag(xyz_std**2)             # rad^2/year^2
+                xyz_deg_std = np.rad2deg(xyz_std*1e6)         # deg/Ma
+            elif 'xyz_deg_std' in in_err:
+                xyz_deg_std = np.array(in_err['xyz_deg_std']) # deg/Ma
+                xyz_std     = np.deg2rad(xyz_deg_std)*1e-6    # rad/year
+                xyz_mas_std = xyz_std / MAS2RAD               # mas/year
+                xyz_cov     = np.diag(xyz_std**2)             # rad^2/year^2
+            # spherical expression: sigma. [deg], [deg], [mas/year] or [deg/Ma]
+            elif ('sph_lat_std' in in_err) and ('sph_lon_std' in in_err):
+                sph_lat_std  = np.array(in_err['sph_lat_std'])      # deg
+                sph_lon_std  = np.array(in_err['sph_lon_std'])      # deg
+                if 'sph_mas_std' in in_err:
+                    sph_mas_std  = np.array(in_err['sph_mas_std'])  # mas/year
+                    sph_std      = [np.deg2rad(sph_lat_std),        # rad
+                                    np.deg2rad(sph_lon_std),        # rad
+                                    sph_mas_std * MAS2RAD  ]        # rad/yr
+                if 'sph_deg_std' in in_err:
+                    sph_deg_std  = np.array(in_err['sph_deg_std'])  # deg/Ma
+                    sph_std      = [np.deg2rad(sph_lat_std),        # rad
+                                    np.deg2rad(sph_lon_std),        # rad
+                                    np.deg2rad(sph_deg_std)*1e-6]   # rad/yr
+            # cartesian expression: FULL covariance. [rad^2/year^2]
+            elif 'xyz_cov' in in_err:
+                xyz_cov     = in_err['xyz_cov']             # rad^2/year^2
+                xyz_std     = np.diag(xyz_cov)**0.5         # rad/year
+                xyz_mas_std = xyz_std/MAS2RAD               # mas/year
+                xyz_deg_std = np.rad2deg(xyz_std*1e6)       # deg/Ma
+
+        # no error source is identified
+        else:
+            print(f'no source of error measure: {src}')
+            errDict = dict(**locals())
+            errDict = {k: v for k, v in errDict.items() if any(ele in k for ele in ['cov','std']) and v is not None}
+            if append:
+                self.append_to_pole(errDict)
+            return
+
+
+        # covariance in spherical space
+        # sph_cov_rad:        lat       lon         rate
+        #             lat  [[ rad^2     rad^2       rad^2/yr   ]
+        #             lon   [ rad^2     rad^2       rad^2/yr   ]
+        #            rate   [ rad^2/yr  rad^2/yr    rad^2/yr^2 ]]
+        if xyz_cov is not None: # 1. propagate from cartesian cov
+            sph_cov_rad = cart2sph_err(self.wx*MAS2RAD,    #  rad/yr
+                                       self.wy*MAS2RAD,    #  rad/yr
+                                       self.wz*MAS2RAD,    #  rad/yr
+                                       xyz_cov)            # (rad/yr) ^2
+        else: # 2. assume diagonal from user input
+            sph_cov_rad = np.diag(sph_std**2)
+            xyz_cov     = sph2cart_err(self.wx*MAS2RAD,    #  rad/yr
+                                       self.wy*MAS2RAD,    #  rad/yr
+                                       self.wz*MAS2RAD,    #  rad/yr
+                                       sph_cov_rad)
+            xyz_std     = np.diag(xyz_cov)**0.5         # rad/year
+            xyz_mas_std = xyz_std/MAS2RAD               # mas/year
+            xyz_deg_std = np.rad2deg(xyz_std*1e6)       # deg/Ma
+
+        # covariance in spherical space
+        # sph_cov_deg:        lat       lon         rate
+        #             lat  [[ deg^2     deg^2       deg^2/yr   ]
+        #             lon   [ deg^2     deg^2       deg^2/yr   ]
+        #            rate   [ deg^2/yr  deg^2/yr    deg^2/yr^2 ]]
+        sph_cov_deg = sph_cov_rad * (180/np.pi)**2
+
+        # sigma in spherical space
+        sph_lat_std = (sph_cov_deg[0,0]**0.5)            # deg
+        sph_lon_std = (sph_cov_deg[1,1]**0.5)            # deg
+        sph_mas_std = (sph_cov_deg[2,2]**0.5) / MAS2RAD  # mas/year
+        sph_deg_std = (sph_cov_deg[2,2]**0.5)*1e6        # deg/Ma
+
+        # return output
+        errDict = dict(**locals())
+        errDict = {k: v for k, v in errDict.items() if any(ele in k for ele in ['cov','std']) and v is not None}
+        if append:
+            self.append_to_pole(errDict)
+        return
+
+
     def print_info(self):
         """Print the Euler pole information.
         """
@@ -328,17 +494,32 @@ class EulerPole:
         vals = [self.poleLat, self.poleLon, self.rotRate, self.wx, self.wy, self.wz]
         md = len(str(int(np.max(np.abs(vals))))) + 5
         md += 1 if any(x < 0 for x in vals) else 0
+        mde = md-4
 
-        print('\n------------------ Euler Pole description ------------------')
+        # errors strings
+        sph_lat_std = f'{self.sph_lat_std:{mde}.4f}'    if 'sph_lat_std' in vars(self) else '--'
+        sph_lon_std = f'{self.sph_lon_std:{mde}.4f}'    if 'sph_lon_std' in vars(self) else '--'
+        sph_deg_std = f'{self.sph_deg_std:{mde}.4f}'    if 'sph_deg_std' in vars(self) else '--'
+        sph_mas_std = f'{self.sph_mas_std:{mde}.4f}'    if 'sph_mas_std' in vars(self) else '--'
+        x_deg_std   = f'{self.xyz_deg_std[0]:{mde}.4f}' if 'xyz_deg_std' in vars(self) else '--'
+        y_deg_std   = f'{self.xyz_deg_std[1]:{mde}.4f}' if 'xyz_deg_std' in vars(self) else '--'
+        z_deg_std   = f'{self.xyz_deg_std[2]:{mde}.4f}' if 'xyz_deg_std' in vars(self) else '--'
+        x_mas_std   = f'{self.xyz_mas_std[0]:{mde}.4f}' if 'xyz_mas_std' in vars(self) else '--'
+        y_mas_std   = f'{self.xyz_mas_std[1]:{mde}.4f}' if 'xyz_mas_std' in vars(self) else '--'
+        z_mas_std   = f'{self.xyz_mas_std[2]:{mde}.4f}' if 'xyz_mas_std' in vars(self) else '--'
+
+        # print msg
+        print('\n------------------ Euler Pole ± 1 * std ------------------')
         print('Spherical expression:')
-        print(f'   Pole Latitude  : {self.poleLat:{md}.4f} deg')
-        print(f'   Pole Longitude : {self.poleLon:{md}.4f} deg')
-        print(f'   Rotation rate  : {self.rotRate * MASY2DMY:{md}.4f} deg/Ma   = {self.rotRate:{md}.4f} mas/yr')
+        print(f'   Pole Latitude  : {self.poleLat:{md}.4f} ± {sph_lat_std} deg')
+        print(f'   Pole Longitude : {self.poleLon:{md}.4f} ± {sph_lon_std} deg')
+        print(f'   Rotation rate  : {self.rotRate * MASY2DMY:{md}.4f} ± {sph_deg_std} deg/Ma   = {self.rotRate:{md}.4f} ± {sph_mas_std} mas/yr')
         print('Cartesian expression (angular velocity vector):')
-        print(f'   wx             : {self.wx * MASY2DMY:{md}.4f} deg/Ma   = {self.wx:{md}.4f} mas/yr')
-        print(f'   wy             : {self.wy * MASY2DMY:{md}.4f} deg/Ma   = {self.wy:{md}.4f} mas/yr')
-        print(f'   wz             : {self.wz * MASY2DMY:{md}.4f} deg/Ma   = {self.wz:{md}.4f} mas/yr')
+        print(f'   wx             : {self.wx * MASY2DMY:{md}.4f} ± {x_deg_std} deg/Ma   = {self.wx:{md}.4f} ± {x_mas_std} mas/yr')
+        print(f'   wy             : {self.wy * MASY2DMY:{md}.4f} ± {y_deg_std} deg/Ma   = {self.wy:{md}.4f} ± {y_mas_std} mas/yr')
+        print(f'   wz             : {self.wz * MASY2DMY:{md}.4f} ± {z_deg_std} deg/Ma   = {self.wz:{md}.4f} ± {z_mas_std} mas/yr')
         print('------------------------------------------------------------\n')
+        return
 
 
     def get_velocity_xyz(self, lat, lon, alt=0.0, ellps=True, print_msg=True):
@@ -429,11 +610,11 @@ class EulerPole:
 #   1. Euler pole forward formulation:
 #       + https://yuankailiu.github.io/assets/docs/Euler_pole_doc.pdf
 #         (need a proper reference here...)
-#   2. Uncertainty propagation:
+#   2. Uncertainty propagation: from cartesian pole (w_x, w_y, w_z) to spherical pole (lat, lon, rate)
 #       + https://github.com/tobiscode/disstans
 #       + Goudarzi, M. A., Cocard, M., & Santerre, R. (2014),*EPC: Matlab software to estimate Euler pole parameters*,GPS Solutions, 18(1), 153–162,
 #         doi:`10.1007/s10291-013-0354-4 <https://doi.org/10.1007/s10291-013-0354-4
-def cart2sph_err(w_x, w_y, w_z, rotation_covariance):
+def cart2sph_err(w_x, w_y, w_z, cartesian_covariance):
     """
     Adapted from disstans/disstans/tools.py (https://github.com/tobiscode/disstans/blob/656c8be6d3d948f66fe091c7e3982e85ee6604cb/disstans/tools.py#L1688)
     Reference: Goudarzi et al., 2014, equation 18
@@ -445,8 +626,23 @@ def cart2sph_err(w_x, w_y, w_z, rotation_covariance):
                     [-w_y / w_xy_mag**2              ,  w_x / w_xy_mag**2              ,  0                  ], # Longitude
                     [ w_x / w_mag                    ,  w_y / w_mag                    ,  w_z / w_mag        ]  # Rotation rate
                     ])
-    euler_pole_covariance = jac @ rotation_covariance @ jac.T
-    return euler_pole_covariance
+    spherical_covariance = jac @ cartesian_covariance @ jac.T
+    return spherical_covariance
+
+
+def sph2cart_err(w_x, w_y, w_z, spherical_covariance):
+    """
+    Inverse of the previous function
+    """
+    w_xy_mag = np.linalg.norm(np.array([w_x, w_y]))
+    w_mag    = np.linalg.norm(np.array([w_x, w_y, w_z]))
+    jac = np.array([
+                    [-w_x*w_z / (w_xy_mag * w_mag**2), -w_y*w_z / (w_xy_mag * w_mag**2), -w_xy_mag / w_mag**2], # Latitude
+                    [-w_y / w_xy_mag**2              ,  w_x / w_xy_mag**2              ,  0                  ], # Longitude
+                    [ w_x / w_mag                    ,  w_y / w_mag                    ,  w_z / w_mag        ]  # Rotation rate
+                    ])
+    cartesian_covariance = np.linalg.inv(jac) @ spherical_covariance @ np.linalg.inv(jac.T)
+    return cartesian_covariance
 
 
 def cart2sph(rx, ry, rz):
@@ -590,7 +786,7 @@ def update_projection(axs, axi, projection, fig=None):
     return fig, axs.flat[start]
 
 
-def read_plate_outline(pmm_name='GSRM', plate_name=None):
+def read_plate_outline(pmm_name='GSRM', plate_name=None, print_msg=False):
     """Read the plate boundaries for the given plate motion model.
 
     Parameters: pmm_name   - str, plate motion (model) name
@@ -598,11 +794,12 @@ def read_plate_outline(pmm_name='GSRM', plate_name=None):
     Returns:    outline    - dict, a dictionary that contains lists of vertices in lat/lon for all plates
                              OR shapely.geometry.polygon.Polygon object, boundary of the given "plate".
     """
+    vprint = print if print_msg else lambda *args, **kwargs: None
 
     # check input
     if 'GSRM' in pmm_name:
         pmm_name = 'GSRM'
-        pmm_dict = GSRM_V21_PMM
+        pmm_dict = GSRM_NNR_V2_1_PMM
 
     elif 'MORVEL' in pmm_name:
         pmm_name = 'MORVEL'
@@ -637,6 +834,7 @@ def read_plate_outline(pmm_name='GSRM', plate_name=None):
                 if key and vertices:
                     pname = plate_abbrev2name[key]
                     outlines[pname] = np.array(vertices)
+                    vprint(f'getting {key} {pname}')
                 # identify the new plate name abbreviation
                 if line.startswith('> '):
                     key = line.split('> ')[1]
@@ -644,18 +842,22 @@ def read_plate_outline(pmm_name='GSRM', plate_name=None):
                     key = line.split('# ')[1]
                 else:
                     key = str(line)
-                # remove the line change string
-                if key.endswith('\n'):
-                    key = key.split('\n')[0]
+                key = key.splitlines()[0].upper()
+                # watch out for some plate_bound_data file has lower, upper indicating different plates
                 # new vertices for the new plate
                 vertices = []
+                if key not in plate_abbrev2name:
+                    vprint(f' no name {key} in {pmm_name} PMM, ignore')
+                    key, vertices = None, None
+                    continue
 
             # get plate outline vertices
             else:
-                vert = np.array(line.split()).astype(float)
-                if coord_order == 'lola':
-                    vert = np.flip(vert)
-                vertices.append(vert)
+                if key:
+                    vert = np.array(line.split()).astype(float)
+                    if coord_order == 'lola':
+                        vert = np.flip(vert)
+                    vertices.append(vert)
 
     # outline of a specific plate
     if plate_name:
@@ -673,18 +875,26 @@ def read_plate_outline(pmm_name='GSRM', plate_name=None):
     return outline
 
 
-def plot_plate_motion(plate_boundary, epole_obj, center_lalo=None, qscale=200, qunit=50,
-                      satellite_height=1e6, figsize=[5, 5], axes=None, **kwargs):
+def plot_plate_motion(plate_boundary, epole_obj,
+                      map_style='globe', center_lalo=None, satellite_height=1e6, extent=None,
+                      qscale=200, qunit=50, qwidth=.0075, qcolor='coral', qname=None, unit='mm',
+                      ax=None, figsize=[5, 5], **kwargs):
     """Plot the globe map wityh plate boundary, quivers on some points.
 
     Parameters: plate_boundary   - shapely.geometry.Polygon object
-                epole_obj        - mintpy.objects.euler_pole.EulerPole object
-                center_lalo      - list of 2 float, center the map at this latitude, longitude
+                epole_obj        - mintpy.objects.euler_pole.EulerPole object (can be a list of poles)
+                map_style        - style of projection {'globe', 'platecarree'}
+                center_lalo      - globe projection:       list of 2 float, center the map at this lat, lon
+                satellite_height - globe projection:       height of the perspective view looking in meters
+                extent           - PlateCarree proection:  map extent [lon0, lon1, lat0, lat1]
                 qscale           - float, scaling factor of the quiver
                 qunit            - float, length of the quiver legend in mm/yr
-                satellite_height - height of the perspective view looking in meters
+                qcolor           - str, quiver color
+                unit             - str, {'mm','cm','m'} of the plate motion vector
+                figsize          - figure size
+                ax               - matplotlib axis
                 kwargs           - dict, dictionary for plotting
-    Returns:    fig, ax          - matplotlib figure and axes objects
+    Returns:    ax               - matplotlib figure and axes objects
     Examples:
         from matplotlib import pyplot as plt
         from mintpy.objects import euler_pole
@@ -698,9 +908,21 @@ def plot_plate_motion(plate_boundary, epole_obj, center_lalo=None, qscale=200, q
         plate_boundary = euler_pole.read_plate_outline('GSRM', 'Arabia')
 
         # plot plate motion
-        fig, ax = euler_pole.plot_plate_motion(plate_boundary, epole_obj)
+        ax = euler_pole.plot_plate_motion(plate_boundary, epole_obj)
         plt.show()
     """
+    import matplotlib.ticker as mticker
+    from cartopy.mpl.ticker import (
+        LatitudeFormatter,
+        LatitudeLocator,
+        LongitudeFormatter,
+        LongitudeLocator,
+    )
+
+    def _extent2poly(extent):
+        x1, x2, y1, y2 = extent
+        poly = np.array([[y1,x1],[y1,x2],[y2,x2],[y2,x1]])
+        return geometry.Polygon(poly)
 
     def _sample_coords_within_polygon(polygon_obj, ny=10, nx=10):
         """Make a set of points inside the defined sphericalpolygon object.
@@ -752,44 +974,90 @@ def plot_plate_motion(plate_boundary, epole_obj, center_lalo=None, qscale=200, q
     kwargs['pts_mec']     = kwargs.get('pts_mec', 'k')
     kwargs['pts_mew']     = kwargs.get('pts_mew', 1)
 
-    if epole_obj:
-        pole_lalo = np.array([epole_obj.poleLat, epole_obj.poleLon])
+    # MULTIPLE POLE PLOTTING:
+    #-----------------------------------------------------------
+    # make a list of pole objects / quiver colors / quiver names
+    if epole_obj is not None:
+        if isinstance(epole_obj, list):
+            epole = epole_obj[0]
+        else:
+            epole_obj = [epole_obj]
+            epole = epole_obj[0]
+        if isinstance(qcolor, str):
+            qcolor = [qcolor]*len(epole_obj)
+        if isinstance(qname, str):
+            qname = [qname]*len(epole_obj)
+
+        pole_lalo = np.array([epole.poleLat, epole.poleLon])
+
+    else:
+        pole_lalo = None
+
+    #-----------------------------------------------------------
+
     if plate_boundary:
         bnd_centroid = np.array(plate_boundary.centroid.coords)[0]
 
-    # map projection is based on: map center and satellite_height
-    # map center
-    if not isinstance(center_lalo, (list, tuple, np.ndarray)):
-        if center_lalo == 'point':
-            center_lalo = kwargs['pts_lalo']
-        elif center_lalo == 'pole' and epole_obj:
-            center_lalo = pole_lalo
-            if kwargs['pts_lalo'] is None:
-                kwargs['pts_lalo'] = pole_lalo
-        elif center_lalo == 'mid' and epole_obj:
-            if abs(pole_lalo[1] - bnd_centroid[1]) < 90.:
-                center_lalo = np.array([(pole_lalo[0] + bnd_centroid[0])/2,
-                                        (pole_lalo[1] + bnd_centroid[1])%360/2])
+    if map_style == 'globe':
+        # map projection is based on: map center and satellite_height
+        # map center
+        if not isinstance(center_lalo, (list, tuple, np.ndarray)):
+            if center_lalo == 'point':
+                center_lalo = kwargs['pts_lalo']
+            elif center_lalo == 'pole' and epole:
+                center_lalo = pole_lalo
+                if kwargs['pts_lalo'] is None:
+                    kwargs['pts_lalo'] = pole_lalo
+            elif center_lalo == 'mid' and epole:
+                if abs(pole_lalo[1] - bnd_centroid[1]) < 90.:
+                    center_lalo = np.array([(pole_lalo[0] + bnd_centroid[0])/2,
+                                            (pole_lalo[1] + bnd_centroid[1])%360/2])
+                else:
+                    center_lalo = bnd_centroid
+                if kwargs['pts_lalo'] is None:
+                    kwargs['pts_lalo'] = pole_lalo
             else:
                 center_lalo = bnd_centroid
-            if kwargs['pts_lalo'] is None:
-                kwargs['pts_lalo'] = pole_lalo
-        else:
-            center_lalo = bnd_centroid
-    print(f'Map center at ({center_lalo[0]:.1f}N, {center_lalo[1]:.1f}E)')
-    map_proj = ccrs.NearsidePerspective(center_lalo[1], center_lalo[0], satellite_height=satellite_height)
+
+        print(f'Map center at ({center_lalo[0]:.1f}N, {center_lalo[1]:.1f}E)')
+        map_proj = ccrs.NearsidePerspective(center_lalo[1], center_lalo[0], satellite_height=satellite_height)
+        extent   = None
+        extentPoly = plate_boundary
+    elif map_style == 'platecarree':
+        map_proj   = ccrs.PlateCarree()
+        extentPoly = _extent2poly(extent)
 
     # make a base map from cartopy
-    if axes is None:
+    if ax is None:
         fig, ax = plt.subplots(figsize=figsize, subplot_kw=dict(projection=map_proj))
-    else:
-        fig, ax = update_projection(axes[0], axes[1], map_proj)
-    ax.set_global()
-    ax.gridlines(color=kwargs['grid_lc'],
-                 linestyle=kwargs['grid_ls'],
-                 linewidth=kwargs['grid_lw'],
-                 xlocs=np.arange(-180,180,30),
-                 ylocs=np.linspace(-80,80,10))
+
+    # map extent & grids
+    if map_style == 'globe':
+        # make the map global rather than have it zoom in to the extents of any plotted data
+        ax.set_global()
+        gl = ax.gridlines(crs=ccrs.PlateCarree(),
+                          color=kwargs['grid_lc'],
+                          linestyle=kwargs['grid_ls'],
+                          linewidth=kwargs['grid_lw'],
+                          xlocs=np.arange(-180,180,30),
+                          ylocs=np.linspace(-80,80,10),
+                          )
+    elif map_style == 'platecarree':
+        ax.set_extent(extent, crs=map_proj)
+        gl = ax.gridlines(crs=ccrs.PlateCarree(),
+                          color=kwargs['grid_lc'],
+                          draw_labels=True,
+                          linestyle=kwargs['grid_ls'],
+                          linewidth=kwargs['grid_lw'],
+                          xlocs=mticker.MaxNLocator(4),
+                          ylocs=mticker.MaxNLocator(4),
+                          xformatter=LongitudeFormatter(),
+                          yformatter=LatitudeFormatter(),
+                          )
+        gl.top_labels  = False
+        gl.left_labels = False
+
+    # cartopy features
     ax.add_feature(cfeature.OCEAN, color=kwargs['c_ocean'])
     ax.add_feature(cfeature.LAND,  color=kwargs['c_land'])
     ax.add_feature(cfeature.COASTLINE, linewidth=kwargs['lw_coast'])
@@ -798,20 +1066,23 @@ def plot_plate_motion(plate_boundary, epole_obj, center_lalo=None, qscale=200, q
     if plate_boundary:
         poly_lats = np.array(plate_boundary.exterior.coords)[:, 0]
         poly_lons = np.array(plate_boundary.exterior.coords)[:, 1]
-        ax.plot(poly_lons, poly_lats, color=kwargs['lc_pbond'], transform=ccrs.Geodetic(), linewidth=kwargs['lw_pbond'])
-        ax.fill(poly_lons, poly_lats, color=kwargs['c_plate'],  transform=ccrs.Geodetic(), alpha=kwargs['alpha_plate'])
+        # ccrs.Geodetic()
+        ax.plot(poly_lons, poly_lats, color=kwargs['lc_pbond'], transform=ccrs.PlateCarree(), linewidth=kwargs['lw_pbond'])
+        ax.fill(poly_lons, poly_lats, color=kwargs['c_plate'],  transform=ccrs.PlateCarree(), alpha=kwargs['alpha_plate'])
 
-        # compute the plate motion from Euler rotation
-        if epole_obj:
+        # MULTIPLE POLE PLOTTING:
+        #-----------------------------------------------------------
+        for j, (epole, qc) in enumerate(zip(epole_obj, qcolor)):
             # select sample points inside the polygon
-            sample_lats, sample_lons = _sample_coords_within_polygon(plate_boundary, ny=kwargs['qnum'], nx=kwargs['qnum'])
+            polygon = plate_boundary.intersection(extentPoly)
+            sample_lats, sample_lons = _sample_coords_within_polygon(polygon, ny=kwargs['qnum'], nx=kwargs['qnum'])
 
             # calculate plate motion on sample points
-            ve, vn = epole_obj.get_velocity_enu(lat=sample_lats, lon=sample_lons)[:2]
+            ve, vn = epole.get_velocity_enu(lat=sample_lats, lon=sample_lons)[:2]
 
-            # scale from m/yr to mm/yr
-            ve *= 1e3
-            vn *= 1e3
+            # scale the vector unit
+            if unit == 'mm':    ve *= 1e3; vn *= 1e3
+            elif unit == 'cm':  ve *= 1e2; vn *= 1e2
             norm = np.sqrt(ve**2 + vn**2)
 
             # correcting for "East" further toward polar region; re-normalize ve, vn
@@ -821,16 +1092,15 @@ def plot_plate_motion(plate_boundary, epole_obj, center_lalo=None, qscale=200, q
             vn /= renorm
 
             # ---------- plot inplate vectors --------------
-            q = ax.quiver(sample_lons, sample_lats, ve, vn,
-                          transform=ccrs.PlateCarree(), scale=qscale,
-                          width=.0075, color='coral', angles="xy")
-            # legend
-            # put an empty title for extra whitepace at the top
-            #ax.set_title('  ', pad=10)
-            if axes is None:
-                ax.quiverkey(q, X=0.6, Y=0.1, U=qunit, label=f'{qunit} mm/yr', labelpos='E', coordinates='axes', color='k', fontproperties={'size':kwargs['font_size']})
-            else:
-                axes[0][-1].quiverkey(q, X=0.6, Y=0.1, U=qunit, label=f'{qunit} mm/yr', labelpos='E', coordinates='axes', color='k', fontproperties={'size':kwargs['font_size']})
+            q = ax.quiver(sample_lons, sample_lats, ve, vn, transform=ccrs.PlateCarree(), scale=qscale, width=qwidth, color=qc, angles="xy")
+            ax.quiverkey(q, X=0.2, Y=0.1, U=qunit, label=f'{qunit} {unit}/yr', labelpos='E', coordinates='axes', color='k', fontproperties={'size':kwargs['font_size']})
+
+        # quiver lines legend
+        if qname is not None:
+            from matplotlib.lines import Line2D
+            lines = [Line2D([0], [0], color=qc, linewidth=3, linestyle='-') for qc in qcolor]
+            ax.legend(lines, qname, loc='lower right', fontsize=10)
+        #-----------------------------------------------------------
 
     # add custom points (e.g., show some points of interest)
     if kwargs['pts_lalo'] is not None:
@@ -839,4 +1109,4 @@ def plot_plate_motion(plate_boundary, epole_obj, center_lalo=None, qscale=200, q
                    fc=kwargs['pts_mfc'], ec=kwargs['pts_mec'],
                    lw=kwargs['pts_mew'], transform=ccrs.PlateCarree())
 
-    return fig, ax
+    return ax

@@ -20,7 +20,7 @@ from mintpy.objects.ramp import deramp
 
 
 ######################################## utilities functions ##############################
-def label_conn_comp(mask, min_area=2.5e3, erosion_size=5, print_msg=False):
+def label_conn_comp(mask, min_area=2.5e3, min_area_ratio=3e-3, erosion_size=5, print_msg=False):
     """Label / clean up the conn comp (mask)
 
     Parameters: mask         - 2D np.ndarray of bool/int
@@ -36,7 +36,7 @@ def label_conn_comp(mask, min_area=2.5e3, erosion_size=5, print_msg=False):
     label_img, num_label = measure.label(mask, connectivity=1, return_num=True)
 
     ## remove small regions
-    min_area = min(min_area, label_img.size * 3e-3)
+    min_area = min(min_area, label_img.size * min_area_ratio)
     if print_msg:
         print(f'remove regions with area < {int(min_area)}')
     mask = morph.remove_small_objects(label_img, min_size=min_area, connectivity=1)
@@ -378,4 +378,19 @@ class connectComponent:
         ax.plot(self.refX, self.refY, 'ks', ms=2)
         return ax
 
+    def retrieve_bridge_aoi(self, radius=50):
+        # bridges
+        masks0 = []
+        masks1 = []
+        for bridge in self.bridges:
+            # endpoint window
+            if radius > 0:
+                aoi_mask0, aoi_mask1 = self.get_bridge_endpoint_aoi_mask(bridge, radius=radius)
+                label_mask0 = self.labelImg == bridge['label0']
+                label_mask1 = self.labelImg == bridge['label1']
+                mask0 = np.ma.masked_where(~(aoi_mask0*label_mask0), np.zeros(self.labelImg.shape))
+                mask1 = np.ma.masked_where(~(aoi_mask1*label_mask1), np.zeros(self.labelImg.shape))
+                masks0.append(mask0)
+                masks1.append(mask1)
+        return masks0, masks1
 ######################################## end of connectComponent class ####################################

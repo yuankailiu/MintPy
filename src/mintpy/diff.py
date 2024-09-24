@@ -122,6 +122,7 @@ def diff_timeseries(file1, file2, out_file, force_diff=False, max_num_pixel=2e8)
         # read data2 (consider different reference_date/pixel)
         print(f'read from file: {file2}')
         data2 = readfile.read(file2, datasetName=date_list_shared, box=box)[0] * unit_fac
+        mask2 = data2 == 0.
 
         if ref_val is not None:
             print(f'* referencing data from {os.path.basename(file2)} to y/x: {ref_y}/{ref_x}')
@@ -134,11 +135,11 @@ def diff_timeseries(file1, file2, out_file, force_diff=False, max_num_pixel=2e8)
 
         # read data1
         print(f'read from file: {file1}')
-        data = readfile.read(file1, box=box)[0]
+        data = readfile.read(file1, box=box)[0][date_flag_shared]
 
         # apply differencing
-        mask = data == 0.
-        data[date_flag_shared] -= data2
+        mask = (data == 0) + mask2
+        data -= data2
         data[mask] = 0.                   # Do not change zero phase value
         del data2
 
@@ -170,7 +171,7 @@ def diff_timeseries_and_velocity(file1, file2, out_file, max_num_pixel=2e8):
 
     if ref_y and ref_x:
         ref_box = (ref_x, ref_y, ref_x + 1, ref_y + 1)
-        ref_val = readfile.read(file2, datasetName='velocity', box=ref_box)[0]
+        ref_val = np.median(readfile.read(file2, datasetName='velocity', box=ref_box)[0])
     else:
         ref_val = None
 
@@ -213,7 +214,7 @@ def diff_timeseries_and_velocity(file1, file2, out_file, max_num_pixel=2e8):
         velo = readfile.read(file2, datasetName='velocity', box=box)[0]
 
         if ref_val is not None:
-            print(f'* referencing velocity to y/x: {ref_y}/{ref_x} with value of {ref_val*100:.2f} cm/year')
+            print(f'* referencing velocity to y/x: {ref_y}/{ref_x} with value of {ref_val:.2f} m/year')
             velo -= ref_val
 
         # calculate design matrix from the time-func file
@@ -224,6 +225,7 @@ def diff_timeseries_and_velocity(file1, file2, out_file, max_num_pixel=2e8):
         m = np.vstack([np.zeros(num_pixel), velo.flatten()])
         ts_fit = np.matmul(G_fit, m)
         data2 = ts_fit.reshape(-1, box_len, box_wid)
+        mask2 = data2 == 0.
 
         ###################################################################
 
@@ -237,7 +239,7 @@ def diff_timeseries_and_velocity(file1, file2, out_file, max_num_pixel=2e8):
         data = readfile.read(file1, box=box)[0]
 
         # apply differencing
-        mask = data == 0.
+        mask = (data == 0.) + mask2
         data -= data2
         data[mask] = 0.               # Do not change zero phase value
         del data2
@@ -296,7 +298,95 @@ def diff_ifgram_stack(file1, file2, out_file):
     return out_file
 
 
-def diff_ifgram_and_timeseries(unw_file, ts_file, cor_file):
+def reconstruct_ts2ifgStack(unw_file, ts_file, dname=None, out_file=None):
+    """Compuate the re-constructed interferogram stack from timeseries
+
+    Parameters: unw_file - str, path of the template interferogram file
+                ts_file  - str, path of the time-series file, e.g. timeseries.h5
+    Returns:    ifgStack - array, 3D array of the reconstructed ifgStack
+    """
+    # attributes
+    atr = readfile.read_attribute(unw_file)
+    dunit = atr.get('UNIT', 'radian')
+
+    # pair list
+    slice_list = readfile.get_slice_list(unw_file)
+    slice_list = [x for x in slice_list if x.startswith(dname+'-')]
+    date12_list = [x.split(dname+'-')[-1] for x in slice_list]
+    print(f'total {len(date12_list)} pairs to reconstruct')
+
+    # timeseries date list
+    slice_list = readfile.get_slice_list(ts_file)
+    date_list = [x.split('timeseries-')[-1] for x in slice_list]
+
+    # read the correction
+    ts = readfile.read(ts_file)[0]
+
+    # read ifgram meta
+    ifg_bperp = readfile.read(unw_file, datasetName='bperp')[0]
+    ifg_date  = readfile.read(unw_file, datasetName='date')[0]
+    dropIgram = readfile.read(unw_file, datasetName='dropIfgram')[0]
+
+    # allocate list
+    ifgStack = []
+    ifgBperp = []
+    ifgDate  = []
+    ifgDrop  = []
+
+    prog_bar = ptime.progressBar(maxValue=len(date12_list))
+    for i, date12 in enumerate(date12_list):
+        date1, date2 = date12.split('_')
+        if (date1 not in date_list) or (date2 not in date_list):
+            continue
+
+        prog_bar.update(i+1, suffix=f'{i+1}: '+dname+'-'+date12)
+
+        # compute ifg from date12 (ifgramStack.h5 convention: ifg=date2-date1)
+        ifg = ts[date_list.index(date2),:,:] - ts[date_list.index(date1),:,:]
+        if dunit.startswith('rad'):
+            ifg *= -4. * np.pi / float(atr['WAVELENGTH'])
+
+        # append data
+        ifgStack.append(ifg)
+        ifgBperp.append(ifg_bperp[i])
+        ifgDate.append(ifg_date[i])
+        ifgDrop.append(dropIgram[i])
+
+    prog_bar.close()
+
+    # array-like
+    ifgStack = np.array(ifgStack)
+    ifgBperp = np.array(ifgBperp)
+    ifgDate = np.array(ifgDate)
+    ifgDrop = np.array(ifgDrop)
+
+    # apply referencing
+    if 'REF_Y' in atr.keys():
+        ref_y, ref_x = int(atr['REF_Y']), int(atr['REF_X'])
+        ref_arr = np.einsum('i,jk->ijk', ifgStack[:, ref_y, ref_x],  np.ones(ifgStack.shape[1:]))
+        ifgStack -= ref_arr
+        print(f're-referencing all reconstructed ifg to pixel ({ref_y}, {ref_x})')
+
+    # save to outfile
+    if out_file:
+        if atr['FILE_TYPE'] == 'ifgramStack':
+            ds_dict = {'bperp'      : ifgBperp,
+                       'date'       : ifgDate,
+                       'dropIfgram' : ifgDrop,
+                       'unwrapPhase': ifgStack
+                    }
+        else:
+            ds_dict = ifgStack
+
+        print(f'write corrected data to {out_file}')
+        writefile.write(ds_dict, out_file, atr)
+        return out_file
+    # simply return the array
+    else:
+        return ifgStack
+
+
+def diff_ifgram_and_timeseries(unw_file, ts_file, cor_file, dname=None):
     """Calculate the difference between two unwrapped interferogram files.
 
     Parameters: unw_file - str, path of the interferogram file
@@ -307,38 +397,62 @@ def diff_ifgram_and_timeseries(unw_file, ts_file, cor_file):
 
     atr = readfile.read_attribute(unw_file)
     dunit = atr.get('UNIT', 'radian')
-    dname = 'phase' if dunit.startswith('rad') else ''
+    if not dname:
+        dname = 'phase' if dunit.startswith('rad') else ''
 
     # read data
     print(f'read {dname} from {unw_file}')
     data, atr = readfile.read(unw_file, datasetName=dname)
-    date1, date2 = ptime.yyyymmdd(atr['DATE12'].split('-'))
 
-    # read the correction
-    print(f'calc {dname} for {date1}-{date2} from {ts_file}')
-    delay  = readfile.read(ts_file, datasetName=date2)[0]
-    delay -= readfile.read(ts_file, datasetName=date1)[0]
-    if dunit.startswith('rad'):
-        print(f'convert {dname} from radian to meter')
-        delay *= -4. * np.pi / float(atr['WAVELENGTH'])
+    # Stack or a single ifgram
+    if atr['FILE_TYPE'] == 'ifgramStack':
+        # reconstruct the pairs
+        delay = reconstruct_ts2ifgStack(unw_file, ts_file, dname)
+        for i in range(data.shape[0]):
+            # apply the correction (and re-referencing)
+            data[i,:,:] -= delay[i,:,:]
 
-    # apply the correction (and re-referencing)
-    data -= delay
-    if 'REF_Y' in atr.keys():
-        ref_y, ref_x = int(atr['REF_Y']), int(atr['REF_X'])
-        data -= data[ref_y, ref_x]
-        print(f're-referencing to pixel ({ref_y}, {ref_x})')
+        if 'REF_Y' in atr.keys():
+            ref_y, ref_x = int(atr['REF_Y']), int(atr['REF_X'])
+            ref_arr = np.einsum('i,jk->ijk', data[:, ref_y, ref_x],  np.ones(data.shape[1:]))
+            data -= ref_arr
+            print(f're-referencing all differenced ifg to pixel ({ref_y}, {ref_x})')
+
+    else:
+        # compute ifg from date12
+        date1, date2 = ptime.yyyymmdd(atr['DATE12'].split('-'))
+
+        # read the correction
+        print(f'calc {dname} for {date1}-{date2} from {ts_file}')
+        delay  = readfile.read(ts_file, datasetName=date2)[0]
+        delay -= readfile.read(ts_file, datasetName=date1)[0]
+        if dunit.startswith('rad'):
+            print(f'convert {dname} from radian to meter')
+            delay *= -4. * np.pi / float(atr['WAVELENGTH'])
+
+        # apply the correction (and re-referencing)
+        data -= delay
+        if 'REF_Y' in atr.keys():
+            ref_y, ref_x = int(atr['REF_Y']), int(atr['REF_X'])
+            data -= data[ref_y, ref_x]
+            print(f're-referencing to pixel ({ref_y}, {ref_x})')
 
     if atr['FILE_TYPE'] == '.unw':
         print(f'read magnitude from {unw_file}')
         mag = readfile.read(unw_file, datasetName='magnitude')[0]
         ds_dict = {'magnitude': mag, 'phase': data}
+    elif atr['FILE_TYPE'] == 'ifgramStack':
+        ds_dict = {'bperp'      : readfile.read(unw_file, datasetName='bperp')[0],
+                   'date'       : readfile.read(unw_file, datasetName='date')[0],
+                   'dropIfgram' : readfile.read(unw_file, datasetName='dropIfgram')[0],
+                   'unwrapPhase': data
+                   }
     else:
         ds_dict = data
 
     print(f'write corrected data to {cor_file}')
     writefile.write(ds_dict, cor_file, atr)
-
+    print(f'prepare metadata for {cor_file}')
     # prepare ISCE metadata file by
     # 1. copy and rename metadata files
     # 2. update file path inside files
@@ -363,7 +477,7 @@ def diff_ifgram_and_timeseries(unw_file, ts_file, cor_file):
     return cor_file
 
 
-def diff_file(file1, file2, out_file, force_diff=False, max_num_pixel=2e8):
+def diff_file(file1, file2, out_file, force_diff=False, max_num_pixel=2e8, no_data_values=[0,np.nan]):
     """calculate/write file1 - file2
 
     Parameters: file1         - str, path of file1
@@ -394,7 +508,7 @@ def diff_file(file1, file2, out_file, force_diff=False, max_num_pixel=2e8):
     elif all(i == 'ifgramStack' for i in [k1, k2]):
         diff_ifgram_stack(file1, file2[0], out_file)
 
-    elif k1 in ['.unw', 'displacement', '.off'] and k2 == 'timeseries':
+    elif k1 in ['.unw', 'displacement', '.off', 'ifgramStack'] and k2 == 'timeseries':
         diff_ifgram_and_timeseries(unw_file=file1, ts_file=file2[0], cor_file=out_file)
 
     else:
@@ -412,7 +526,7 @@ def diff_file(file1, file2, out_file, force_diff=False, max_num_pixel=2e8):
         dsDict = {}
         for ds_name in ds_names:
             print(f'differencing {ds_name} ...')
-            data = readfile.read(file1, datasetName=ds_name)[0]
+            data = readfile.read(file1, datasetName=ds_name, no_data_values=no_data_values)[0]
             dtype = data.dtype
 
             # loop over each file2
@@ -420,7 +534,7 @@ def diff_file(file1, file2, out_file, force_diff=False, max_num_pixel=2e8):
                 # ignore ds_name if input file has single dataset
                 ds_name2read = None if len(ds_names_list[i+1]) == 1 else ds_name
                 # read
-                data2 = readfile.read(fname, datasetName=ds_name2read)[0]
+                data2 = readfile.read(fname, datasetName=ds_name, no_data_values=no_data_values)[0]
                 # do the referencing for velocity files
                 if ds_name == 'velocity':
                     ref_y, ref_x = check_reference(atr1, atr2)[1:]

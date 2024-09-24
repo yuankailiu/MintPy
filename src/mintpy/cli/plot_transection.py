@@ -43,8 +43,8 @@ def create_parser(subparsers=None):
     parser.add_argument('file', nargs='+',
                         help='input file to show transection')
     parser.add_argument('--dset', dest='dset', help='Dataset name to read')
-    parser.add_argument('-v','--vlim', dest='vlim', nargs=2, metavar=('VMIN', 'VMAX'), type=float,
-                        help='Display limits for matrix plotting.')
+    #parser.add_argument('-v','--vlim', dest='vlim', nargs=2, metavar=('VMIN', 'VMAX'), type=float,
+    #                    help='Display limits for matrix plotting.')
     parser.add_argument('--offset','--off', dest='offset', type=float, nargs='+', default=[0.05],
                         help='offset between transects [for multiple files only; default: %(default)s m].\n'
                              'number of input offsets should be:\n'
@@ -65,11 +65,14 @@ def create_parser(subparsers=None):
     lines.add_argument('--line-file', dest='lola_file',
                        help='file with start and end point info in lon lat, same as GMT format.\n'+GMT_FILE)
 
-    lines.add_argument('--interpolation', default='nearest', choices=['nearest', 'bilinear', 'cubic'],
-                       help='interpolation method while extacting profile along the line. Default: nearest.')
+    #lines.add_argument('--interpolation', default='nearest', choices=['nearest', 'bilinear', 'cubic'],
+    #                   help='interpolation method while extacting profile along the line. Default: nearest.')
     lines.add_argument('--ms', '--markersize', dest='marker_size', type=float, default=2.0,
                        help='Point marker size. Default: 2.0')
-
+    parser = arg_utils.add_data_disp_argument(parser)
+    parser = arg_utils.add_dem_argument(parser)
+    parser = arg_utils.add_mask_argument(parser)
+    parser = arg_utils.add_reference_argument(parser)
     parser = arg_utils.add_figure_argument(parser)
     parser = arg_utils.add_save_argument(parser)
     return parser
@@ -161,10 +164,14 @@ def get_view_cmd(iargs):
 
     # define ALL parsing options from create_parser() that are common to view.py
     parser = argparse.ArgumentParser(description='view.py parser')
-    parser.add_argument('-v','--vlim', dest='vlim', nargs=2, metavar=('VMIN', 'VMAX'), type=float,
-                        help='Display limits for matrix plotting.')
+    #parser.add_argument('-v','--vlim', dest='vlim', nargs=2, metavar=('VMIN', 'VMAX'), type=float,
+    #                    help='Display limits for matrix plotting.')
     parser.add_argument('--noverbose', dest='print_msg', action='store_false',
                         help='Disable the verbose message printing.')
+    parser = arg_utils.add_data_disp_argument(parser)
+    parser = arg_utils.add_dem_argument(parser)
+    parser = arg_utils.add_mask_argument(parser)
+    parser = arg_utils.add_reference_argument(parser)
     parser = arg_utils.add_figure_argument(parser)
     parser = arg_utils.add_save_argument(parser)
 

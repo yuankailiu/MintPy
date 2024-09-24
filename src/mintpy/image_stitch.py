@@ -145,10 +145,16 @@ def stitch_two_matrices(mat1, atr1, mat2, atr2, apply_offset=True, print_msg=Tru
     mat11[y1:y1+length1, x1:x1+width1] = mat1
     mat22[y2:y2+length2, x2:x2+width2] = mat2
     mat_diff = mat22 - mat11
+    diff_med = np.nanmedian(mat_diff)
+    diff_avg = np.nanmean(mat_diff)
 
     # apply the offset
     if apply_offset:
-        offset = np.nansum(mat_diff) / np.sum(np.isfinite(mat_diff))
+        #offset = np.nansum(mat_diff) / np.sum(np.isfinite(mat_diff))
+        print(' >>>  ykliu: median difference: ', np.nanmedian(diff_med))
+        print(' >>>  ykliu: mean   difference: '  , np.nanmean(diff_avg))
+        offset = np.min([abs(diff_med), abs(diff_avg)])   # get whichever is smaller
+        offset = float(diff_med)                          # always take the median
         if ~np.isnan(offset):
             vprint(f'average offset between two matrices in the common area: {offset}')
             vprint(f'offset all pixel values in the 2nd matrix by {offset} ')
@@ -193,14 +199,31 @@ def stitch_two_matrices(mat1, atr1, mat2, atr2, apply_offset=True, print_msg=Tru
             atr.pop(key)
             print(f'remove {key}')
 
+    # update REF_Y/X
+    coord = ut.coordinate(atr)
+    if ('REF_LAT' in atr) and ('REF_LON' in atr):
+        ref_y, ref_x = coord.geo2radar(float(atr['REF_LAT']), float(atr['REF_LON']))[:2]
+        atr['REF_Y'], atr['REF_X'] = ref_y, ref_x
+        print(f'update REF_Y/X: {ref_y}/{ref_x}')
+
+    # delete SUBSET_Y/XMIN/MAX
+    for key in ['SUBSET_XMIN', 'SUBSET_XMAX', 'SUBSET_YMIN', 'SUBSET_YMAX']:
+        if key in atr.keys():
+            atr.pop(key)
+            print(f'remove {key}')
+
     return mat, atr, mat11, mat22, mat_diff
 
 
 def plot_stitch(mat11, mat22, mat, mat_diff, out_fig=None, disp_scale=1, disp_vlim=None, disp_cmap=None):
     """plot stitching result"""
 
+    avg = np.nanmean(mat_diff)
+    med = np.nanmedian(mat_diff)
+    std = np.nanstd(mat_diff)
+
     # plot settings
-    titles = ['file 1', 'file 2', 'stitched', 'difference']
+    titles = ['file 1', 'file 2', 'stitched', f'diff mean={disp_scale*avg:.2f}, median={disp_scale*med:.2f}, std={disp_scale*std:.2f}']
     if disp_scale != 1:
         print(f'scale the data by a factor of {disp_scale} for plotting')
     mat_mli = multilook_data(mat, 20, 20, method='mean')
@@ -226,6 +249,11 @@ def plot_stitch(mat11, mat22, mat, mat_diff, out_fig=None, disp_scale=1, disp_vl
     fig.savefig(out_fig, bbox_inches='tight', transparent=True, dpi=150)
     print(f'save figure to file: {out_fig}')
 
+    out_txt = out_fig.split('.')[0] + '.txt'
+    with open(out_txt, 'w') as f:
+        f.write(f'mean difference: {avg}\n')
+        f.write(f'median difference: {med}\n')
+        f.write(f'std difference: {std}\n')
     return
 
 
@@ -245,7 +273,7 @@ def stitch_files(fnames, out_file, apply_offset=True, disp_fig=True, no_data_val
 
     # special treatment for velocity/time_function files
     if atr['FILE_TYPE'] == 'velocity' and len(ds_names) > 1:
-        ds_names = ['velocity']
+        ds_names = ['velocity','velocityStd']
 
     print(f'files to be stitched: {fnames}')
     print(f'datasets to be stitched: {ds_names}')
@@ -285,6 +313,9 @@ def stitch_files(fnames, out_file, apply_offset=True, disp_fig=True, no_data_val
                 mat2[inc_angle2 == 0] = np.nan
 
             print('stitching ...')
+            if 'mask' in ds_name.lower():
+                apply_offset = False
+
             mat, atr, mat11, mat22, mat_diff = stitch_two_matrices(
                 mat, atr,
                 mat2, atr2,

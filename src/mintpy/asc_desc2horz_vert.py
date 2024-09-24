@@ -12,6 +12,58 @@ from mintpy.utils import ptime, readfile, utils as ut, writefile
 
 
 ################################################################################
+def get_corners(atr):
+    """Get corners coordinate."""
+    length = int(atr['LENGTH'])
+    width = int(atr['WIDTH'])
+    W = float(atr['X_FIRST'])
+    N = float(atr['Y_FIRST'])
+    lon_step = float(atr['X_STEP'])
+    lat_step = float(atr['Y_STEP'])
+    S = N + lat_step * length
+    E = W + lon_step * width
+
+    return S, N, W, E, width, length
+
+
+def get_aoi_lalo(atr_list):
+    atr_Alist = []
+    atr_Dlist = []
+    for i, atr in enumerate(atr_list):
+        if atr['ORBIT_DIRECTION'].lower().startswith('asc'):
+            atr_Alist.append(atr)
+        elif atr['ORBIT_DIRECTION'].lower().startswith('desc'):
+            atr_Dlist.append(atr)
+
+    if len(atr_Alist)==1 and len(atr_Dlist)==1:
+        print(':: Only 1 Asc and 1 Dsc datasets')
+        S, N, W, E = get_overlap_lalo(atr_list)
+    else:
+        print(':: More than 1 Asc and 1 Dsc datasets')
+        Sa, Na, Wa, Ea = get_union_lalo(atr_Alist)
+        Sd, Nd, Wd, Ed = get_union_lalo(atr_Dlist)
+        W, E = max(Wa, Wd), min(Ea, Ed)
+        S, N = max(Sa, Sd), min(Na, Nd)
+
+    return S, N, W, E
+
+
+def get_union_lalo(atr_list):
+    S, N, W, E = None, None, None, None
+    for i, atr in enumerate(atr_list):
+        Si, Ni, Wi, Ei = ut.four_corners(atr)
+
+        if i == 0:
+            S, N, W, E = Si, Ni, Wi, Ei
+        else:
+            S = min(Si, S)
+            N = max(Ni, N)
+            W = min(Wi, W)
+            E = max(Ei, E)
+
+    return S, N, W, E
+
+
 def get_overlap_lalo(atr_list):
     """Find overlap area in lat/lon of geocoded files based on their metadata.
     Parameters: atr_list - list of dict, attribute dictionary of two input files in geo coord
@@ -72,6 +124,18 @@ def get_design_matrix4east_north_up(los_inc_angle, los_az_angle, obs_direction=N
     return G
 
 
+def get_design_matrix4no_vert(los_inc_angle, los_az_angle):
+    num_file = los_inc_angle.shape[0]
+    G = np.zeros((num_file, 2), dtype=np.float32)
+    for i in range(num_file):
+        G[i, 0] = -np.sin(np.deg2rad(los_inc_angle[i])) * np.sin(np.deg2rad(los_az_angle[i]))
+        G[i, 1] =  np.sin(np.deg2rad(los_inc_angle[i])) * np.cos(np.deg2rad(los_az_angle[i]))
+
+    # mute G entries for zero incidence angle (no data there, zero is the default missing pixel)
+    G[los_inc_angle==0, :] = 0
+    return G
+
+
 def get_design_matrix4horz_vert(los_inc_angle, los_az_angle, horz_az_angle=-90):
     """Design matrix G to convert asc/desc range displacement into horz/vert direction.
     Only asc + desc -> hz + up is implemented for now.
@@ -100,27 +164,42 @@ def get_design_matrix4horz_vert(los_inc_angle, los_az_angle, horz_az_angle=-90):
         G[i, 0] = np.sin(np.deg2rad(los_inc_angle[i])) * np.cos(np.deg2rad(los_az_angle[i] - horz_az_angle))
         G[i, 1] = np.cos(np.deg2rad(los_inc_angle[i]))
 
+    # mute G entries for zero incidence angle (no data there, zero is the default missing pixel)
+    G[los_inc_angle==0, :] = 0
     return G
 
 
-def asc_desc2horz_vert(dlos, los_inc_angle, los_az_angle, horz_az_angle=-90, step=20):
+def asc_desc2horz_vert(dlos, los_inc_angle, los_az_angle, horz_az_angle=-90, dlosStd=None, step=20):
     """Decompose asc / desc LOS data into horz / vert data.
     Parameters: dlos          - 3D np.ndarray in size of (num_file, length, width), LOS displacement in meters.
                 los_inc_angle - 1/3D np.ndarray in size of (num_file), length, width), LOS incidence angle in degree.
                 los_az_angle  - 1/3D np.ndarray in size of (num_file), length, width), LOS azimuth   angle in degree.
-                horz_az_angle - float, horizontal azimuth angle of interest in degree.
+                horz_az_angle - float, horizontal azimuth angle of interest in degree.; 'up' assume no vertical
                 step          - int, geometry step size
     Returns:    dhorz         - 2D np.ndarray in size of (length, width), horizontal displacement in meters.
                 dvert         - 2D np.ndarray in size of (length, width), vertical   displacement in meters.
     """
     # initiate output
     (num_file, length, width) = dlos.shape
+    num_tracks = np.nansum(dlos.astype(bool), axis=0).astype(int)
+
+    # padded zeros in dlosStd means no data, high uncertainty
+    if dlosStd is not None:
+        dlosStd[dlosStd==0] = 1e9
+
     dhorz = np.zeros((length, width), dtype=np.float32) * np.nan
     dvert = np.zeros((length, width), dtype=np.float32) * np.nan
 
     # 0D (constant) incidence / azimuth angle --> invert once for all pixels
     if los_inc_angle.ndim == 1:
-        G = get_design_matrix4horz_vert(los_inc_angle, los_az_angle, horz_az_angle)
+        if horz_az_angle == 'up':
+            G = get_design_matrix4no_vert(los_inc_angle, los_az_angle)
+        else:
+            G = get_design_matrix4horz_vert(los_inc_angle, los_az_angle, horz_az_angle)
+        if dlosStd is not None:
+            # weighted LSQR
+            G    *= 1 / dlosStd.reshape(num_file, -1)
+            dlos *= 1 / dlosStd.reshape(num_file, -1)
         print('decomposing asc/desc into horz/vert direction ...')
         dhv = np.dot(np.linalg.pinv(G), dlos.reshape(num_file, -1)).astype(np.float32)
         dhorz = dhv[0, :].reshape(length, width)
@@ -139,11 +218,22 @@ def asc_desc2horz_vert(dlos, los_inc_angle, los_az_angle, horz_az_angle=-90, ste
                 x0, x1 = step * j, min(step * (j + 1), width)
 
                 # calculate the median geometry for the local window
+                los_inc_angle[los_inc_angle==0] = np.nan
+                los_az_angle[los_az_angle==0]   = np.nan
                 med_los_inc_angle = np.nanmedian(los_inc_angle[:, y0:y1, x0:x1], axis=(1,2))
                 med_los_az_angle  = np.nanmedian( los_az_angle[:, y0:y1, x0:x1], axis=(1,2))
-                if np.all(~np.isnan(med_los_inc_angle)):
+                if dlosStd is not None:
+                    med_std       = np.nanmedian(      dlosStd[:, y0:y1, x0:x1], axis=(1,2))
 
-                    G = get_design_matrix4horz_vert(med_los_inc_angle, med_los_az_angle, horz_az_angle)
+                if np.all(~np.isnan(med_los_inc_angle)):
+                    if horz_az_angle == 'up':
+                        G = get_design_matrix4no_vert(med_los_inc_angle, med_los_az_angle)
+                    else:
+                        G = get_design_matrix4horz_vert(med_los_inc_angle, med_los_az_angle, horz_az_angle)
+                    if dlosStd is not None:
+                        # weighted LSQR
+                        G = np.matmul(np.diag(1/med_std), G)
+                        dlos[:, y0:y1, x0:x1] = np.multiply(1/dlosStd[:, y0:y1, x0:x1], dlos[:, y0:y1, x0:x1])
                     dhv = np.dot(np.linalg.pinv(G), dlos[:, y0:y1, x0:x1].reshape(num_file, -1))
                     dhorz[y0:y1, x0:x1] = dhv[0].reshape(y1-y0, x1-x0)
                     dvert[y0:y1, x0:x1] = dhv[1].reshape(y1-y0, x1-x0)
@@ -153,6 +243,10 @@ def asc_desc2horz_vert(dlos, los_inc_angle, los_az_angle, horz_az_angle=-90, ste
 
     else:
         raise ValueError(f'un-supported incidence angle matrix dimension ({los_inc_angle.ndim})!')
+
+    # mute pixels with less than 2 tracks/geometries
+    dhorz[num_tracks<2] = np.nan
+    dvert[num_tracks<2] = np.nan
 
     return dhorz, dvert
 
@@ -165,7 +259,8 @@ def run_asc_desc2horz_vert(inps):
 
     ## 1. calculate the overlapping area in lat/lon
     atr_list = [readfile.read_attribute(fname, datasetName=inps.ds_name) for fname in inps.file]
-    S, N, W, E = get_overlap_lalo(atr_list)
+    #S, N, W, E = get_overlap_lalo(atr_list)
+    S, N, W, E = get_aoi_lalo(atr_list)
     lat_step = float(atr_list[0]['Y_STEP'])
     lon_step = float(atr_list[0]['X_STEP'])
     length = int(round((S - N) / lat_step))
@@ -189,15 +284,50 @@ def run_asc_desc2horz_vert(inps):
         y0, x0 = coord.lalo2yx(N, W)
         box = (x0, y0, x0 + width, y0 + length)
 
+        Si, Ni, Wi, Ei, width_i, length_i = get_corners(atr)
+
+        # initial box location (when indata perfectly overlay with outdata)
+        x_start, y_start = 0, 0
+        x_end = x_start + width_i
+        y_end = y_start + length_i
+
+        # update box
+        if box[0]<0:
+            x_start += -box[0]
+            box[0] = 0
+        if box[1]<0:
+            y_start += -box[1]
+            box[1] = 0
+        if box[2]>width_i:
+            box[2] = width_i
+        if box[3]>length_i:
+            box[3] = length_i
+        box = tuple(box)
+        x_end = x_start + (box[2]-box[0])
+        y_end = y_start + (box[3]-box[1])
+        print(f':: track {atr["trackNumber"]}; read box={box}')
+
+        # box location
+        box_loc = (x_start, y_start, x_end, y_end)
+
         # read data
-        dlos[i, :] = readfile.read(fname, box=box, datasetName=inps.ds_name)[0]
+        dlos[i, y_start:y_end, x_start:x_end] = readfile.read(fname, box=box, datasetName=inps.ds_name, no_data_values=[np.nan, 0])[0]
         msg = f'{inps.ds_name} ' if inps.ds_name else ''
         print(f'read {msg} from file: {fname}')
 
+        # read data std if needed
+        if inps.w_std:
+            dlosStd = np.zeros((num_file, length, width), dtype=np.float32)
+            dlosStd[i, y_start:y_end, x_start:x_end] = readfile.read(fname, box=box, datasetName=inps.ds_name+'Std', no_data_values=[np.nan, 0])[0]
+            msg = f'{inps.ds_name+"Std"} ' if inps.ds_name+"Std" else ''
+            print(f'read {msg} from file: {fname}')
+        else:
+            dlosStd = None
+
         # read geometry
         if inps.geom_file:
-            los_inc_angle[i, :] = readfile.read(inps.geom_file[i], box=box, datasetName='incidenceAngle')[0]
-            los_az_angle[i, :]  = readfile.read(inps.geom_file[i], box=box, datasetName='azimuthAngle')[0]
+            los_inc_angle[i, y_start:y_end, x_start:x_end] = readfile.read(inps.geom_file[i], box=box, datasetName='incidenceAngle', no_data_values=[np.nan, 0])[0]
+            los_az_angle[i, y_start:y_end, x_start:x_end]  = readfile.read(inps.geom_file[i], box=box, datasetName='azimuthAngle', no_data_values=[np.nan, 0])[0]
             print(f'read 2D LOS incidence / azimuth angles from file: {inps.geom_file[i]}')
         else:
             los_inc_angle[i] = ut.incidence_angle(atr, dimension=0, print_msg=False)
@@ -209,7 +339,7 @@ def run_asc_desc2horz_vert(inps):
 
     ## 3. decompose LOS displacements into horizontal / Vertical displacements
     print('---------------------')
-    dhorz, dvert = asc_desc2horz_vert(dlos, los_inc_angle, los_az_angle, inps.horz_az_angle)
+    dhorz, dvert = asc_desc2horz_vert(dlos, los_inc_angle, los_az_angle, inps.horz_az_angle, dlosStd=None)
 
 
     ## 4. write outputs
@@ -227,7 +357,13 @@ def run_asc_desc2horz_vert(inps):
     atr['Y_FIRST'] = str(N)
 
     # update REF_X/Y
-    ref_lat, ref_lon = float(atr['REF_LAT']), float(atr['REF_LON'])
+    if any(key is None for key in inps.ref_lalo):
+        ref_lat, ref_lon = float(atr['REF_LAT']), float(atr['REF_LON'])
+    else:
+        print(':: Use your manually specified reference point')
+        ref_lat, ref_lon = float(inps.ref_lalo[0]), float(inps.ref_lalo[1])
+        atr['REF_LAT'] = str(ref_lat)
+        atr['REF_LON'] = str(ref_lon)
     [ref_y, ref_x] = ut.coordinate(atr).geo2radar(ref_lat, ref_lon)[0:2]
     atr['REF_Y'] = int(ref_y)
     atr['REF_X'] = int(ref_x)
@@ -262,8 +398,10 @@ def run_asc_desc2horz_vert(inps):
         writefile.write(dhorz, out_file=inps.outfile[0], metadata=atr, ref_file=ref_file)
         print('writing vertical   component to file: '+inps.outfile[1])
         writefile.write(dvert, out_file=inps.outfile[1], metadata=atr, ref_file=ref_file)
-        print('writing los_disp   component to file: '+'los_disp.h5')
-        writefile.write(dlos, out_file='los_disp.h5', metadata=atr, ref_file=ref_file)
+        print('writing line-of-sight component to file: '+'dlos.h5')
+        writefile.write(dlos, out_file='dlos.h5', metadata=atr, ref_file=ref_file)
+        print('writing line-of-sight Std component to file: '+'dlosStd.h5')
+        writefile.write(dlosStd, out_file='dlosStd.h5', metadata=atr, ref_file=ref_file)
         print('writing los_inc_angle to file: '+'los_inc_angle.h5')
         writefile.write(los_inc_angle, out_file='los_inc_angle.h5', metadata=atr, ref_file=ref_file)
         print('writing los_az_angle to file: '+'los_az_angle.h5')

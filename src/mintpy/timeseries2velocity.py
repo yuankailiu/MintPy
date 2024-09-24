@@ -232,6 +232,17 @@ def run_timeseries2time_func(inps):
         print(f'reading data from file {inps.timeseries_file} ...')
         ts_data = readfile.read(inps.timeseries_file, box=box)[0]
 
+        # mask invalid pixels
+        print('skip pixels with zero/nan value in all acquisitions before referencing')
+        ts_stack = np.nanmean(ts_data, axis=0)
+        mask = np.multiply(~np.isnan(ts_stack), ts_stack!=0.)
+        del ts_stack
+        # include the reference point
+        ry, rx = int(atrV['REF_Y']) - box[1], int(atrV['REF_X']) - box[0]
+        if 0 <= rx < box_wid and 0 <= ry < box_len:
+            mask[ry, rx] = 1
+        mask = mask.flatten()
+
         # referencing in time and space
         # for file w/o reference info. e.g. ERA5.h5
         if inps.ref_date:
@@ -270,16 +281,6 @@ def run_timeseries2time_func(inps):
             ## set zero value to a fixed small value to avoid divide by zero
             #epsilon = 1e-5
             #ts_cov[ts_cov<epsilon] = epsilon
-
-        # mask invalid pixels
-        print('skip pixels with zero/nan value in all acquisitions')
-        ts_stack = np.nanmean(ts_data, axis=0)
-        mask = np.multiply(~np.isnan(ts_stack), ts_stack!=0.)
-        del ts_stack
-        # include the reference point
-        ry, rx = int(atrV['REF_Y']) - box[1], int(atrV['REF_X']) - box[0]
-        if 0 <= rx < box_wid and 0 <= ry < box_len:
-            mask[ry * box_wid + rx] = 1
 
         #if ts_cov is not None:
         #    print('skip pxiels with nan STD value in any acquisition')

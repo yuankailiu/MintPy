@@ -12,9 +12,11 @@
 #   )
 
 
+import multiprocessing
 import os
 import time
 import warnings
+from functools import partial
 
 import h5py
 import numpy as np
@@ -28,6 +30,36 @@ from mintpy.objects import (
     TIMESERIES_DSET_NAMES,
 )
 from mintpy.utils import attribute as attr, ptime, readfile, utils0 as ut
+
+########################################################################################
+# PARALLELIZATION CALLING
+
+def call_ifgramObj_read(i_arg, pairs, pairsDict, dsName, box, xstep, ystep, mli_method, no_data_values, resize2shape):
+    # read and/or resize
+    pair = pairs[i_arg]
+    ifgramObj = pairsDict[pair]
+    data = ifgramObj.read(dsName,
+                        box=box,
+                        xstep=xstep,
+                        ystep=ystep,
+                        mli_method=mli_method,
+                        no_data_values=no_data_values,
+                        resize2shape=resize2shape)[0]
+    return data
+
+
+def call_acqObj_read(i_arg, dates, datesDict, dsName, box, xstep, ystep, mli_method, no_data_values, resize2shape):
+    date = dates[i_arg]
+    # read and/or resize
+    acqObj = datesDict[date]
+    data = acqObj.read(dsName,
+                        box=box,
+                        xstep=xstep,
+                        ystep=ystep,
+                        mli_method=mli_method,
+                        no_data_values=no_data_values,
+                        resize2shape=resize2shape)[0]
+    return data
 
 
 ########################################################################################
@@ -98,7 +130,7 @@ class ifgramStackDict:
         return dataType
 
     def write2hdf5(self, outputFile='ifgramStack.h5', access_mode='w', box=None, xstep=1, ystep=1, mli_method='nearest',
-                   compression=None, extra_metadata=None, geom_obj=None):
+                   no_data_values=None, n_procs=1, compression=None, extra_metadata=None, geom_obj=None):
         """Save/write an ifgramStackDict object into an HDF5 file with the structure defined in:
 
         https://mintpy.readthedocs.io/en/latest/api/data_structure/#ifgramstack
@@ -108,6 +140,7 @@ class ifgramStackDict:
                     box            - tuple, subset range in (x0, y0, x1, y1)
                     x/ystep        - int, multilook number in x/y direction
                     mli_method     - str, multilook method, nearest, mean or median
+                    no_data_values - float, no-data value in the input data array
                     compression    - str, HDF5 dataset compression method, None, lzf or gzip
                     extra_metadata - dict, extra metadata to be added into output file
                     geom_obj       - geometryDict object, size reference to determine the resizing operation.
@@ -189,31 +222,58 @@ class ifgramStackDict:
                 if xstep * ystep > 1:
                     print(f'apply {xstep} x {ystep} multilooking/downsampling via {mli_method} ...')
 
-                prog_bar = ptime.progressBar(maxValue=numIfgram)
-                for i, pair in enumerate(self.pairs):
-                    prog_bar.update(i+1, suffix=f'{pair[0]}_{pair[1]}')
+                ## RUN IN PARALLEL
+                ## https://stackoverflow.com/questions/5442910/how-to-use-multiprocessing-pool-map-with-multiple-arguments
+                if n_procs > 1:
+                    print(f'run with {n_procs} multiprocesses')
+                    with multiprocessing.Pool(n_procs) as pool:
+                        data_kwargs = {
+                            "pairs"          : self.pairs,
+                            "pairsDict"      : self.pairsDict,
+                            "dsName"         : dsName,
+                            "box"            : box,
+                            "xstep"          : xstep,
+                            "ystep"          : ystep,
+                            "mli_method"     : mli_method,
+                            "no_data_values" : no_data_values,
+                            "resize2shape"   : resize2shape,
+                        }
+                        i_args = range(len(self.pairs))
+                        results = pool.map(partial(call_ifgramObj_read, **data_kwargs), i_args)
 
-                    # read and/or resize
-                    ifgramObj = self.pairsDict[pair]
-                    data = ifgramObj.read(dsName,
-                                          box=box,
-                                          xstep=xstep,
-                                          ystep=ystep,
-                                          mli_method=mli_method,
-                                          resize2shape=resize2shape)[0]
+                    prog_bar = ptime.progressBar(maxValue=numIfgram)
+                    for i, (pair, data) in enumerate(zip(self.pairs, results)):
+                        prog_bar.update(i+1, suffix=f'{pair[0]}_{pair[1]}')
+                        # write
+                        ds[i, :, :] = data
 
-                    # special handling for offset covariance file
-                    if dsName.endswith('OffsetStd'):
-                        # set no-data value to np.nan
-                        data[data == 99.] = np.nan
+                else:
+                    prog_bar = ptime.progressBar(maxValue=numIfgram)
+                    for i, pair in enumerate(self.pairs):
+                        prog_bar.update(i+1, suffix=f'{pair[0]}_{pair[1]}')
 
-                        # convert variance to std. dev.
-                        dsFile = ifgramObj.datasetDict[dsName]
-                        if dsFile.endswith('cov.bip'):
-                            data = np.sqrt(data)
+                        # read and/or resize
+                        ifgramObj = self.pairsDict[pair]
+                        data = ifgramObj.read(dsName,
+                                            box=box,
+                                            xstep=xstep,
+                                            ystep=ystep,
+                                            mli_method=mli_method,
+                                            no_data_values=no_data_values,
+                                            resize2shape=resize2shape)[0]
 
-                    # write
-                    ds[i, :, :] = data
+                        # special handling for offset covariance file
+                        if dsName.endswith('OffsetStd'):
+                            # set no-data value to np.nan
+                            data[data == 99.] = np.nan
+
+                            # convert variance to std. dev.
+                            dsFile = ifgramObj.datasetDict[dsName]
+                            if dsFile.endswith('cov.bip'):
+                                data = np.sqrt(data)
+
+                        # write
+                        ds[i, :, :] = data
 
                 ds.attrs['MODIFICATION_TIME'] = str(time.time())
                 prog_bar.close()
@@ -323,7 +383,7 @@ class ifgramDict:
             for key, value in metadata.items():
                 setattr(self, key, value)
 
-    def read(self, family, box=None, xstep=1, ystep=1, mli_method='nearest', resize2shape=None):
+    def read(self, family, box=None, xstep=1, ystep=1, mli_method='nearest', no_data_values=None, resize2shape=None):
         """Read data for the given dataset name.
 
         Parameters: self         - ifgramDict object
@@ -331,6 +391,7 @@ class ifgramDict:
                     box          -  tuple of 4 int, in (x0, y0, x1, y1) with respect to the full resolution
                     x/ystep      - int, number of pixels to skip, with respect to the full resolution
                     mli_method   - str, interpolation method, nearest, mean, median
+                    no_data_values - float, no-data value in the input data array
                     resize2shape - tuple of 2 int, resize the native matrix to the given shape
                                    Set to None for not resizing
         Returns:    data         - 2D np.ndarray
@@ -378,7 +439,8 @@ class ifgramDict:
                 data = multilook_data(data,
                                       lks_y=ystep,
                                       lks_x=xstep,
-                                      method=mli_method)
+                                      method=mli_method,
+                                      no_data_val=no_data_values)
 
         return data, meta
 
@@ -477,7 +539,7 @@ class timeseriesDict:
         return dataType
 
     def write2hdf5(self, outputFile='timeseries.h5', access_mode='w', box=None, xstep=1, ystep=1, mli_method='nearest',
-                   compression=None, extra_metadata=None, geom_obj=None):
+                   no_data_values=None, n_procs=1, compression=None, extra_metadata=None, geom_obj=None):
         """Save/write an timeseriesDict object into an HDF5 file with the structure defined in:
 
         https://mintpy.readthedocs.io/en/latest/api/data_structure/#ifgramstack (Kai need to update the doc?)
@@ -487,6 +549,7 @@ class timeseriesDict:
                     box            - tuple, subset range in (x0, y0, x1, y1)
                     x/ystep        - int, multilook number in x/y direction
                     mli_method     - str, multilook method, nearest, mean or median
+                    no_data_values - float, no-data value in the input data array
                     compression    - str, HDF5 dataset compression method, None, lzf or gzip
                     extra_metadata - dict, extra metadata to be added into output file
                     geom_obj       - geometryDict object, size reference to determine the resizing operation.
@@ -568,21 +631,48 @@ class timeseriesDict:
                 if xstep * ystep > 1:
                     print(f'apply {xstep} x {ystep} multilooking/downsampling via {mli_method} ...')
 
-                prog_bar = ptime.progressBar(maxValue=num_date)
-                for i, date in enumerate(self.dates):
-                    prog_bar.update(i+1, suffix=f'{date[0]}')
+                ## RUN IN PARALLEL
+                ## https://stackoverflow.com/questions/5442910/how-to-use-multiprocessing-pool-map-with-multiple-arguments
+                if n_procs > 1:
+                    print(f'run with {n_procs} multiprocesses')
+                    with multiprocessing.Pool(n_procs) as pool:
+                        data_kwargs = {
+                            "dates"          : self.dates,
+                            "datesDict"      : self.datesDict,
+                            "dsName"         : dsName,
+                            "box"            : box,
+                            "xstep"          : xstep,
+                            "ystep"          : ystep,
+                            "mli_method"     : mli_method,
+                            "no_data_values" : no_data_values,
+                            "resize2shape"   : resize2shape,
+                        }
+                        i_args = range(len(self.dates))
+                        results = pool.map(partial(call_acqObj_read, **data_kwargs), i_args)
 
-                    # read and/or resize
-                    acqObj = self.datesDict[date]
-                    data = acqObj.read(dsName,
-                                          box=box,
-                                          xstep=xstep,
-                                          ystep=ystep,
-                                          mli_method=mli_method,
-                                          resize2shape=resize2shape)[0]
+                    prog_bar = ptime.progressBar(maxValue=num_date)
+                    for i, (date, data) in enumerate(zip(self.dates, results)):
+                        prog_bar.update(i+1, suffix=f'{date[0]}')
+                        # write
+                        ds[i, :, :] = data
 
-                    # write
-                    ds[i, :, :] = data
+                else:
+                    prog_bar = ptime.progressBar(maxValue=num_date)
+                    for i, date in enumerate(self.dates):
+                        prog_bar.update(i+1, suffix=f'{date[0]}')
+
+                        # read and/or resize
+                        acqObj = self.datesDict[date]
+                        data = acqObj.read(dsName,
+                                            box=box,
+                                            xstep=xstep,
+                                            ystep=ystep,
+                                            mli_method=mli_method,
+                                            no_data_values=no_data_values,
+                                            resize2shape=resize2shape)[0]
+
+                        # write
+                        ds[i, :, :] = data
 
                 ds.attrs['MODIFICATION_TIME'] = str(time.time())
                 prog_bar.close()
@@ -695,7 +785,7 @@ class timeseriesAcqDict:
             for key, value in metadata.items():
                 setattr(self, key, value)
 
-    def read(self, family, box=None, xstep=1, ystep=1, mli_method='nearest', resize2shape=None):
+    def read(self, family, box=None, xstep=1, ystep=1, mli_method='nearest', no_data_values=None, resize2shape=None):
         """Read data for the given dataset name.
 
         Parameters: self         - ifgramDict object
@@ -703,6 +793,7 @@ class timeseriesAcqDict:
                     box          -  tuple of 4 int, in (x0, y0, x1, y1) with respect to the full resolution
                     x/ystep      - int, number of pixels to skip, with respect to the full resolution
                     mli_method   - str, interpolation method, nearest, mean, median
+                    no_data_values - float, no-data value in the input data array
                     resize2shape - tuple of 2 int, resize the native matrix to the given shape
                                    Set to None for not resizing
         Returns:    data         - 2D np.ndarray
@@ -751,7 +842,8 @@ class timeseriesAcqDict:
                 data = multilook_data(data,
                                       lks_y=ystep,
                                       lks_x=xstep,
-                                      method=mli_method)
+                                      method=mli_method,
+                                      no_data_val=no_data_values)
 
         # 5. check the input unit
         if self.data_unit:
